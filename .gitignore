@@ -1,0 +1,14 @@
+# Carpetas a ignorar
+obsoleto/
+__pycache__/
+
+# Secrets
+.streamlit/secrets.toml
+
+# Python
+*.pyc
+.venv/
+
+# OS
+Thumbs.db
+.DS_Store
