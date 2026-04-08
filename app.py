@@ -1,6 +1,3 @@
-LOGIN_USER = "grido"
-LOGIN_PASS = "contraseña1"
-
 """
 Club Grido Intelligence — Data Analytics Hub
 Tablero analítico interno para el programa de fidelización Club Grido.
@@ -13,6 +10,8 @@ import plotly.graph_objects as go
 import pydeck as pdk
 
 import os
+
+os.environ["MAPBOX_TOKEN"] = st.secrets.get("MAPBOX_API_KEY", "")
 
 # ─────────────────────────────────────────────
 # CONFIG & CONSTANTS
