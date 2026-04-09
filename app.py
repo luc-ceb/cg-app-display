@@ -219,19 +219,31 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
+    # Filters for branch selection
+    provincias = ["Todas"] + sorted(franquicias["provincia"].dropna().unique().tolist())
+    selected_provincia = st.selectbox("🏛 Provincia", options=provincias, key="filter_prov")
 
-    # Build branch selector: branchofficeid → "heladeria — localidad"
+    filtered_franq = franquicias.copy()
+    if selected_provincia != "Todas":
+        filtered_franq = filtered_franq[filtered_franq["provincia"] == selected_provincia]
+
+    localidades = ["Todas"] + sorted(filtered_franq["localidad"].dropna().unique().tolist())
+    selected_localidad = st.selectbox("📌 Localidad", options=localidades, key="filter_loc")
+
+    if selected_localidad != "Todas":
+        filtered_franq = filtered_franq[filtered_franq["localidad"] == selected_localidad]
 
     branch_options = {
         row.branchofficeid: f"{row.numero}-{row.heladeria} — {row.localidad}"
-        for _, row in franquicias.iterrows()
+        for _, row in filtered_franq.iterrows()
     }
 
     selected_bid = st.selectbox(
-        "📍 PUNTO DE VENTA",
+        "📍 Franquicia",
         options=list(branch_options.keys()),
-        format_func=lambda x: f"[{x}] {branch_options[x]}",
+        format_func=lambda x: branch_options[x],
     )
+
 
     st.markdown("---")
     st.markdown(
