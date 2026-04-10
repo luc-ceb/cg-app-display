@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import pydeck as pdk
+import base64
 
 import os
 
@@ -48,7 +49,18 @@ PLOTLY_LAYOUT = dict(
     font=dict(family="DM Sans, sans-serif", color="#e8ecf4"),
     margin=dict(l=40, r=20, t=40, b=40),
 )
+# ─────────────────────────────────────────────
+# CONFIG & CONSTANTS
+# ─────────────────────────────────────────────
 
+DESCRIPCIONES_OCASION = {
+    "Alimento Congelado": "Clientes enfocados en alimentos congelados. Compra concentrada en horario nocturno.",
+    "Consumo en Local": "Priorizan la experiencia en la heladería: cucuruchos, batidos, sundaes. Perfil joven.",
+    "Familia/Niños": "Familias que combinan productos infantiles con surtidos para adultos.",
+    "Individual": "Consumidores de impulso con tickets pequeños: bombones, palitos, frutas bañadas.",
+    "Social/Eventos": "Orientados a reuniones, celebraciones y consumo grupal. Tickets de mayor valor.",
+    "Stock/Abastecimiento": "Compran pote y granel de forma planificada para consumo en el hogar.",
+}
 
 # ─────────────────────────────────────────────
 # LOGIN
@@ -58,17 +70,11 @@ def check_login():
         st.session_state.authenticated = False
 
     if not st.session_state.authenticated:
-        st.markdown("""
-        <div style="display:flex; justify-content:center; margin-top:80px;">
-            <div style="width:56px; height:56px; border-radius:14px;
-                 background:linear-gradient(135deg,#ec7e04,#f5a623);
-                 display:inline-flex; align-items:center; justify-content:center;
-                 font-size:28px; font-weight:800; color:white;
-                 box-shadow:0 4px 24px rgba(236,126,4,0.35);">G</div>
-        </div>
-        <h2 style="text-align:center; margin-top:16px;">Club Grido Intelligence</h2>
-        """, unsafe_allow_html=True)
-
+        col_l, col_c, col_r = st.columns([1, 1, 1])
+        with col_c:
+            st.image("assets/portada.png", width=250)
+        st.markdown("<h2 style='text-align:center; margin-top:16px;'>Club Grido Intelligence</h2>", unsafe_allow_html=True)
+ 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             user = st.text_input("Usuario")
@@ -82,6 +88,7 @@ def check_login():
         st.stop()
 
 check_login()
+
 
 # ─────────────────────────────────────────────
 # CUSTOM CSS
@@ -129,12 +136,11 @@ st.markdown("""
     }
     div[data-testid="stMetric"] label {
         color: rgba(255,255,255,0.6) !important;
-        font-size: 12px !important;
-        text-transform: uppercase;
+        font-size: 10px !important;
         letter-spacing: 0.05em;
     }
     div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-        font-size: 28px !important;
+        font-size: 22px !important;
         font-weight: 700 !important;
         color: #ffffff !important;
     }
@@ -143,6 +149,16 @@ st.markdown("""
     }
     div[data-testid="stMetric"] [data-testid="stMetricDelta"] svg {
         fill: #ec7e04 !important;
+    }
+            
+    /* Force sidebar always open */
+    section[data-testid="stSidebar"] {
+        min-width: 300px !important;
+        max-width: 300px !important;
+        transform: none !important;
+    }
+    section[data-testid="stSidebar"] > div {
+        width: 300px !important;
     }
 
     /* Tabs */
@@ -201,14 +217,10 @@ franquicias = load_franquicias()
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style="text-align:center; padding: 16px 0 24px 0;">
-        <div style="width:56px; height:56px; border-radius:14px;
-             background:linear-gradient(135deg,#ec7e04,#f5a623);
-             display:inline-flex; align-items:center; justify-content:center;
-             font-size:28px; font-weight:800; color:white;
-             box-shadow:0 4px 24px rgba(236,126,4,0.35);">G</div>
-        <div style="margin-top:10px; font-size:16px; font-weight:700; color:#fff;">
+    st .image("assets/portada.png", use_container_width=True)
+    st .markdown("""
+    <div style="text-align:center; padding: 4px 0 16px 0;">
+        <div style="font-size:14px; font-weight:700; color:#fff;">
             Club Grido <span style="color:#ec7e04;">Intelligence</span>
         </div>
         <div style="font-size:10px; color:rgba(255,255,255,0.35);
@@ -259,12 +271,15 @@ branch_info = franquicias[franquicias["branchofficeid"] == selected_bid].iloc[0]
 # ─────────────────────────────────────────────
 # HEADER
 # ─────────────────────────────────────────────
+with open("assets/portada.png", "rb") as f:
+    logo_b64 = base64.b64encode(f.read()).decode()
+
 st.markdown(f"""
 <div class="main-header">
-    <div class="logo">G</div>
+    <div class="logo"><img src="data:image/png;base64,{logo_b64}" style="width:40px; height:40px; border-radius:10px; object-fit:cover;"></div>
     <div>
-        <div class="title">{branch_info['heladeria']} <span class="accent">· {branch_info['localidad']}</span></div>
-        <div class="subtitle">BranchOfficeId: {selected_bid} · {branch_info['provincia']}</div>
+        <div class="title">{branch_info['heladeria']} <span class="accent">· {branch_info['numero']}</span></div>
+        <div class="subtitle">Ubicación: {branch_info['localidad']} · {branch_info['provincia']}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -279,20 +294,39 @@ b_data = load_branch(selected_bid)
 # KPIs
 # ─────────────────────────────────────────────
 n_total = len(b_data)
-n_activos = int((b_data["estado"] == "activo").sum())
-kg_total = round(b_data["Kilos"].sum(), 1)
-ticket_prom = round(b_data["monetary_value"].mean(), 0) if n_total > 0 else 0
+socios_activos = branch_info .get("Socios activos", 0)
+kg_club = branch_info .get("Kilos vendidos por club", 0)
+penetracion = branch_info .get("Penetracion Club", 0)
+pct_penetracion = round(penetracion * 100) if penetracion is not None and not pd.isna(penetracion) else 0
 pct_churn = round(
     (b_data["estado"].isin(["en_riesgo", "abandonado"])).mean() * 100, 1
 ) if n_total > 0 else 0
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Socios Totales", f"{n_total:,}", delta=f"{n_activos} activos")
-k2.metric("Kg Acumulados", f"{kg_total:,.0f} kg")
-k3.metric("Valor Monetario Prom.", f"${ticket_prom:,.0f}")
-k4.metric("Riesgo Churn", f"{pct_churn}%", delta_color="inverse")
+k1.metric("Socios Activos", f"{int(socios_activos):,}", help="Socios activos en el último año")
+k2.metric("Kg Vendidos Club", f"{kg_club:,.0f} kg",help="Kilogramos vendidos por Club Grido en el último año")
+k3.metric("Penetración Club", f"{pct_penetracion}%",help="Porcentaje de kilos vendidos a través del Club sobre el total de ventas mostrador")
+k4.metric("Socios en riesgo", f"{pct_churn}%", delta_color="inverse", help="Porcentaje de socios en estado en riesgo o abandonado")
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+
+def mostrar_leyenda_ocasiones(df_datos, titulo="##### ¿En qué ocasión consumen?"):
+    st.markdown(titulo)
+    # Iteramos sobre todos los segmentos definidos
+    for seg_name, desc in DESCRIPCIONES_OCASION.items():
+        color = SEGMENT_COLORS.get(seg_name, GRIS) # Usará gris si no está en SEGMENT_COLORS
+        # Contamos cuántos registros hay en el dataframe que le pasemos
+        cnt = int((df_datos["Ocasion de consumo"] == seg_name).sum())
+        
+        st.markdown(
+            f"<div style='margin:4px 0; cursor:help;'>"
+            f"<span style='color:{color}; font-size:16px;'>●</span> "
+            f"<b>{seg_name}</b> ({cnt})"
+            f"<div style='font-size:10px; color:rgba(255,255,255,0.4); margin-left:20px;'>{desc}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ─────────────────────────────────────────────
@@ -327,7 +361,7 @@ with tab1:
         kg_min = float(b_data["Kilos"].min()) if n_total > 0 else 0.0
         kg_max = float(b_data["Kilos"].max()) if n_total > 0 else 1.0
         kg_range = st.slider(
-            "Rango de Kg",
+            "Rango de Kg comprados",
             min_value=kg_min,
             max_value=kg_max,
             value=(kg_min, kg_max),
@@ -343,16 +377,7 @@ with tab1:
 
         st.markdown(f"**{len(filtered)}** clientes filtrados")
 
-        # Legend
-        st.markdown("##### ¿En que ocasión consumen?")
-        for seg_name in all_segments:
-            color = SEGMENT_COLORS.get(seg_name, GRIS)
-            cnt = int((filtered["Ocasion de consumo"] == seg_name).sum())
-            st.markdown(
-                f"<span style='color:{color}; font-size:16px;'>●</span> "
-                f"**{seg_name}** ({cnt})",
-                unsafe_allow_html=True,
-            )
+        mostrar_leyenda_ocasiones(filtered)
 
     with col_map:
         def seg_to_rgb(seg_name):
@@ -362,11 +387,24 @@ with tab1:
 
         # Filter valid coordinates: not NaN and not (0,0)
         map_data = filtered.dropna(subset=["Latitud", "Longitud"]).copy()
+        map_data["Kilos"] = map_data["Kilos"].round(2)
         map_data = map_data[(map_data["Latitud"] != 0) & (map_data["Longitud"] != 0)]
 
-        map_data["color_r"] = map_data["Ocasion de consumo"].apply(lambda s: seg_to_rgb(s)[0])
-        map_data["color_g"] = map_data["Ocasion de consumo"].apply(lambda s: seg_to_rgb(s)[1])
-        map_data["color_b"] = map_data["Ocasion de consumo"].apply(lambda s: seg_to_rgb(s)[2])
+        # Risk categories and colors
+        def get_riesgo(p):
+            if p < 0.3:
+                return "Alto"
+            elif p <= 0.7:
+                return "Medio"
+            else:
+                return "Bajo"
+
+        RIESGO_COLORS = {"Alto": [231, 76, 60], "Medio": [241, 196, 15], "Bajo": [46, 204, 113]}
+
+        map_data["riesgo_abandono"] = map_data["p_alive"].apply(get_riesgo)
+        map_data["color_r"] = map_data["riesgo_abandono"].apply(lambda r: RIESGO_COLORS[r][0])
+        map_data["color_g"] = map_data["riesgo_abandono"].apply(lambda r: RIESGO_COLORS[r][1])
+        map_data["color_b"] = map_data["riesgo_abandono"].apply(lambda r: RIESGO_COLORS[r][2])
 
         if len(map_data) > 0:
             # Branch location
@@ -403,6 +441,29 @@ with tab1:
             layers = [layer_clients]
 
             if has_branch_coords:
+                branch_point = pd.DataFrame([{
+                    "Longitud": center_lon,
+                    "Latitud": center_lat,
+                    "heladeria": branch_info.get("heladeria", ""),
+                    "localidad": branch_info.get("localidad", ""),
+                    "kg_club": f"{kg_club:,.0f}",
+                    "penetracion": f"{pct_penetracion}%",
+                    "riesgo_churn": f"{pct_churn}%",
+                }])
+                layers.append(pdk.Layer(
+                    "IconLayer",
+                    data=branch_point,
+                    get_position=["Longitud", "Latitud"],
+                    get_icon={
+                        "url": "https://cdn-icons-png.flaticon.com/512/869/869636.png",
+                        "width": 128,
+                        "height": 128,
+                        "anchorY": 128,
+                    },
+                    get_size=40,
+                    pickable=True,
+                ))
+            if has_branch_coords:
                             branch_point = pd.DataFrame([{
                                 "Longitud": center_lon,
                                 "Latitud": center_lat,
@@ -424,12 +485,12 @@ with tab1:
             tooltip = {
                         "html": (
                             "<div style='padding:8px; font-family:DM Sans,sans-serif;'>"
-                            "<b style='color:#ec7e04;'>Cliente {CustomerId}</b><br>"
-                            "📦 <b>{Kilos}</b> kg acumulados<br>"
-                            "🔄 Compras: <b>{Cantidad de compras}</b><br>"
+                            "<b style='color:#ec7e04;'>Cliente {DNI}</b><br>"
+                            "📦 Kg comprados por año: <b>{Kilos}</b><br>"
+                            "🔄 Compras por año: <b>{Cantidad de compras}</b><br>"
                             "📅 Última compra: hace <b>{Dias desde ultima compra}</b> días<br>"
-                            "🎯 Ocasión: <b>{Ocasion de consumo}</b><br>"
-                            "💓 P(alive): <b>{p_alive}</b>"
+                            "🎯 Ocasión de consumo: <b>{Ocasion de consumo}</b><br>"
+                            "⚠️ Riesgo de abandono: <b>{riesgo_abandono}</b>"
                             "</div>"
                         ),
                         "style": {
@@ -463,7 +524,7 @@ with tab1:
 # TAB 2 — ESTADO DE SOCIOS (SUPERVIVENCIA)
 # ═══════════════════════════════════════════════
 with tab2:
-    st.markdown("#### Modelo de Supervivencia — Estado de Socios")
+    st.markdown("#### Estado de mis Socios")
 
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
@@ -497,70 +558,68 @@ with tab2:
             )
             st.plotly_chart(fig_estado, use_container_width=True)
 
-            # Survival curve (simulated from data)
-            st.markdown("##### Curva de Supervivencia Agregada")
-            days = np.arange(0, 365, 5)
-            median_recencia = b_data["recencia"].median()
-            lambda_param = 0.005 if median_recencia < 30 else 0.008
-            surv_curve = np.exp(-lambda_param * days) * 100
+            
+            # # Survival curve (simulated from data)
+            # st.markdown("##### Curva de Supervivencia Agregada")
+            # days = np.arange(0, 365, 5)
+            # median_recencia = b_data["recencia"].median()
+            # lambda_param = 0.005 if median_recencia < 30 else 0.008
+            # surv_curve = np.exp(-lambda_param * days) * 100
 
-            fig_surv = go.Figure()
-            fig_surv.add_trace(go.Scatter(
-                x=days, y=surv_curve,
-                mode="lines", fill="tozeroy",
-                line=dict(color=CELESTE, width=2),
-                fillcolor="rgba(73,195,251,0.1)",
-                name="P(activo)",
-            ))
-            fig_surv.add_hline(y=50, line_dash="dash", line_color=NARANJA, annotation_text="Mediana")
-            fig_surv.update_layout(
-                **PLOTLY_LAYOUT,
-                height=280,
-                xaxis_title="Días desde última compra",
-                yaxis_title="% Prob. Activo",
-                title=dict(text="Función de Supervivencia", font=dict(size=14)),
-            )
-            st.plotly_chart(fig_surv, use_container_width=True)
+            # fig_surv = go.Figure()
+            # fig_surv.add_trace(go.Scatter(
+            #     x=days, y=surv_curve,
+            #     mode="lines", fill="tozeroy",
+            #     line=dict(color=CELESTE, width=2),
+            #     fillcolor="rgba(73,195,251,0.1)",
+            #     name="P(activo)",
+            # ))
+            # fig_surv.add_hline(y=50, line_dash="dash", line_color=NARANJA, annotation_text="Mediana")
+            # fig_surv.update_layout(
+            #     **PLOTLY_LAYOUT,
+            #     height=280,
+            #     xaxis_title="Días desde última compra",
+            #     yaxis_title="% Prob. Activo",
+            #     title=dict(text="Función de Supervivencia", font=dict(size=14)),
+            # )
+            # st.plotly_chart(fig_surv, use_container_width=True)
 
-            # P(alive) distribution histogram
-            st.markdown("##### Distribución de P(alive)")
-            fig_hist = go.Figure()
-            fig_hist.add_trace(go.Histogram(
-                x=b_data["p_alive"],
-                nbinsx=30,
-                marker_color=NARANJA,
-                opacity=0.8,
-            ))
-            fig_hist.add_vline(x=0.6, line_dash="dash", line_color=VERDE, annotation_text="Umbral activo")
-            fig_hist.add_vline(x=0.3, line_dash="dash", line_color=ROJO, annotation_text="Umbral abandono")
-            fig_hist.update_layout(
-                **PLOTLY_LAYOUT,
-                height=250,
-                xaxis_title="P(alive)",
-                yaxis_title="Cantidad de clientes",
-            )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            # # P(alive) distribution histogram
+            # st.markdown("##### Distribución de P(alive)")
+            # fig_hist = go.Figure()
+            # fig_hist.add_trace(go.Histogram(
+            #     x=b_data["p_alive"],
+            #     nbinsx=30,
+            #     marker_color=NARANJA,
+            #     opacity=0.8,
+            # ))
+            # fig_hist.add_vline(x=0.6, line_dash="dash", line_color=VERDE, annotation_text="Umbral activo")
+            # fig_hist.add_vline(x=0.3, line_dash="dash", line_color=ROJO, annotation_text="Umbral abandono")
+            # fig_hist.update_layout(
+            #     **PLOTLY_LAYOUT,
+            #     height=250,
+            #     xaxis_title="P(alive)",
+            #     yaxis_title="Cantidad de clientes",
+            # )
+            # st.plotly_chart(fig_hist, use_container_width=True)
+            
 
         with col_detail:
             st.markdown("##### Clientes con Mayor Riesgo de Abandono")
             top_churn = (
                 b_data.sort_values("p_alive", ascending=True)
                 .head(20)
-                [["CustomerId", "DNI", "p_alive", "Dias desde ultima compra",
-                  "frecuencia", "monetary_value", "estado", "Ocasion de consumo"]]
+                [[ "DNI",  "Dias desde ultima compra",
+                  "frecuencia", "estado", "Ocasion de consumo"]]
                 .copy()
             )
             top_churn.rename(columns={
-                "CustomerId": "Cliente",
-                "p_alive": "P(alive)",
+                "DNI": "Cliente",
                 "Dias desde ultima compra": "Días s/ compra",
                 "frecuencia": "Frecuencia",
-                "monetary_value": "Valor ($)",
                 "estado": "Estado",
                 "Ocasion de consumo": "Ocasión",
             }, inplace=True)
-            top_churn["Valor ($)"] = top_churn["Valor ($)"].apply(lambda x: f"${x:,.0f}")
-            top_churn["P(alive)"] = top_churn["P(alive)"].apply(lambda x: f"{x:.1%}")
             top_churn["Días s/ compra"] = top_churn["Días s/ compra"].apply(lambda x: f"{x:.0f}")
 
             st.dataframe(
@@ -572,10 +631,12 @@ with tab2:
 
             # Summary metrics
             st.markdown("##### Resumen del Punto de Venta")
-            col_s1, col_s2, col_s3 = st.columns(3)
-            col_s1.metric("P(alive) Promedio", f"{b_data['p_alive'].mean():.1%}")
-            col_s2.metric("Recencia Promedio", f"{b_data['recencia'].mean():.0f} días")
-            col_s3.metric("Compras Esperadas", f"{b_data['expected_purchases'].mean():.1f}")
+            col_s1, col_s2= st.columns(2)
+            col_s1.metric("Promedio riesgo de abandono", f"{b_data['p_alive'].mean():.1%}")
+            col_s2.metric("Dias desde ultima compra promedio", f"{b_data['recencia'].mean():.0f} días")
+            #col_s3.metric("Compras Esperadas", f"{b_data['expected_purchases'].mean():.1f}")
+
+
 
 
 # ═══════════════════════════════════════════════
@@ -655,7 +716,7 @@ with tab3:
             seg_summary["Valor_Promedio"] = seg_summary["Valor_Promedio"].apply(lambda x: f"${x:,.0f}")
             seg_summary["P_alive_Promedio"] = seg_summary["P_alive_Promedio"].apply(lambda x: f"{x:.1%}")
 
-            st.dataframe(seg_summary, hide_index=True, use_container_width=True)
+            st.dataframe(seg_summary[['Segmento','Clientes','Kg_Promedio','Compras_Promedio','Valor_Promedio','P_alive_Promedio']], hide_index=True, use_container_width=True)
 
             # Segment descriptions
             st.markdown("##### Descripción de Segmentos")
