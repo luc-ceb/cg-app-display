@@ -309,7 +309,7 @@ tab1, tab2, tab3 = st.tabs([
 # TAB 1 — MAPA DE CLIENTES
 # ═══════════════════════════════════════════════
 with tab1:
-    st.markdown("#### Geolocalización de Socios del Club")
+    st.markdown("#### ¿Donde estan mis Socios?")
 
     col_filtros, col_map = st.columns([1, 3])
 
@@ -344,7 +344,7 @@ with tab1:
         st.markdown(f"**{len(filtered)}** clientes filtrados")
 
         # Legend
-        st.markdown("##### Leyenda de Segmentos")
+        st.markdown("##### ¿En que ocasión consumen?")
         for seg_name in all_segments:
             color = SEGMENT_COLORS.get(seg_name, GRIS)
             cnt = int((filtered["Ocasion de consumo"] == seg_name).sum())
