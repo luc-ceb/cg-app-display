@@ -104,8 +104,8 @@ def check_login():
                     st.error("Usuario o contraseña incorrectos")
         st.stop()
 
-# check_login()
-st.session_state.authenticated =True
+check_login()
+#st.session_state.authenticated =True
 
 # ─────────────────────────────────────────────
 # CUSTOM CSS
