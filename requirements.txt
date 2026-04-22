@@ -4,3 +4,4 @@ pydeck
 pandas
 pyarrow
 numpy
+groq

@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pydeck as pdk
 import base64
+from groq import Groq
 
 import os
 
@@ -391,7 +392,7 @@ tab1, tab2, tab3 ,tab4 , tab5 = st.tabs([
     "💓 Estado de Socios",
     "🍦 Ocasión de Consumo",
     "🎯 Gestioná con Club Grido",
-    "💡 Acciones Recomendadas",
+    "🤖 Asistente Comercial",
 ])
 
 
@@ -1039,10 +1040,265 @@ with tab4:
 
 
 # ═══════════════════════════════════════════════
-# TAB 5 — ACCIONES RECOMENDADAS
+# TAB 4 — GESTIONÁ CON CLUB GRIDO
 # ═══════════════════════════════════════════════
-with tab5:
-    st.markdown("#### Acciones Recomendadas")
-    st.caption("Sugerencias basadas en el estado de tu cartera.")
 
-    # TODO: contenido de la tab
+# Mapeo línea de producto → ocasiones de consumo afines
+PRODUCTO_OCASION = {
+    "Pote/Familiar": ["Stock/Abastecimiento", "Social/Eventos"],
+    "Granel": ["Stock/Abastecimiento", "Social/Eventos"],
+    "Tortas": ["Social/Eventos"],
+    "Palitos/Bombones": ["Individual", "Familia/Niños"],
+    "Consumo en mostrador": ["Consumo en Local"],
+    "Alimento Congelado": ["Alimento Congelado"],
+}
+ 
+OBJETIVOS = [
+    "Recuperar socios inactivos",
+    "Premiar socios fieles",
+    "Aumentar ticket promedio",
+    "Liquidar stock",
+]
+ 
+with tab5:
+    st.markdown("#### 🤖 Asistente Comercial Inteligente - Versión de prueba -")
+    st.markdown(
+        "<div style='font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:20px;'>"
+        "Seleccioná los productos que querés fomentar y el objetivo comercial. "
+        "El asistente utilizará inteligencia artificial para identificar los socios más propensos y generar una promoción sugerida."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+ 
+    if n_total == 0:
+        st.info("No hay socios para este punto de venta.")
+    else:
+        col_input, col_output = st.columns([1, 2])
+ 
+        with col_input:
+            st.markdown("##### 📦 ¿Qué productos querés vender?")
+            productos_sel = st.multiselect(
+                "Líneas de producto",
+                options=list(PRODUCTO_OCASION.keys()),
+                default=["Pote/Familiar"],
+                key="agent_productos",
+            )
+ 
+            st.markdown("##### 🎯 ¿Cuál es el objetivo?")
+            objetivo_sel = st.radio(
+                "Objetivo comercial",
+                options=OBJETIVOS,
+                key="agent_objetivo",
+            )
+ 
+            # Filtrar socios candidatos con pandas
+            ocasiones_afines = []
+            for prod in productos_sel:
+                ocasiones_afines.extend(PRODUCTO_OCASION.get(prod, []))
+            ocasiones_afines = list(set(ocasiones_afines))
+ 
+            if objetivo_sel == "Recuperar socios inactivos":
+                candidatos = b_data[
+                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
+                    & (b_data["p_alive"] < 0.85)
+                ]
+                filtro_desc = "Riesgo medio/alto (P(alive) < 0.85)"
+            elif objetivo_sel == "Premiar socios fieles":
+                candidatos = b_data[
+                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
+                    & (b_data["p_alive"] >= 0.85)
+                ]
+                filtro_desc = "Socios activos (P(alive) ≥ 0.85)"
+            elif objetivo_sel == "Aumentar ticket promedio":
+                mediana_kg = b_data["Kilos"].median()
+                candidatos = b_data[
+                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
+                    & (b_data["Kilos"] <= mediana_kg)
+                ]
+                filtro_desc = f"Socios con consumo ≤ {mediana_kg:.1f} kg (bajo la mediana)"
+            elif objetivo_sel == "Liquidar stock":
+                candidatos = b_data[
+                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
+                ]
+                filtro_desc = "Todos los socios de las ocasiones afines"
+            else:
+                candidatos = pd.DataFrame()
+                filtro_desc = ""
+ 
+            # Mostrar resumen de candidatos
+            st.markdown("---")
+            st.markdown("##### 📊 Socios candidatos")
+            st.metric("Total candidatos", len(candidatos))
+ 
+            if len(candidatos) > 0:
+                st.markdown(
+                    f"<div style='font-size:12px; color:rgba(255,255,255,0.5);'>"
+                    f"<b>Filtro aplicado:</b> {filtro_desc}<br>"
+                    f"<b>Ocasiones afines:</b> {', '.join(ocasiones_afines)}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+ 
+                # Mini resumen por ocasión
+                dist_ocasion = candidatos["Ocasion de consumo"].value_counts()
+                for oc, cnt in dist_ocasion.items():
+                    color = SEGMENT_COLORS.get(oc, GRIS)
+                    st.markdown(
+                        f"<span style='color:{color};'>●</span> {oc}: **{cnt}**",
+                        unsafe_allow_html=True,
+                    )
+ 
+            generar = st.button(
+                "🚀 Generar propuesta comercial",
+                use_container_width=True,
+                type="primary",
+                disabled=len(candidatos) == 0 or len(productos_sel) == 0,
+            )
+ 
+        with col_output:
+            if generar and len(candidatos) > 0:
+                # Construir resumen para el LLM
+                resumen_datos = f"""
+                Franquicia: {branch_info.get('numero', '')}-{branch_info.get('heladeria', '')}
+                Ubicación: {branch_info.get('localidad', '')}, {branch_info.get('provincia', '')}
+                Objetivo comercial: {objetivo_sel}
+                Productos a fomentar: {', '.join(productos_sel)}
+
+                DATOS DE LA FRANQUICIA:
+                - Socios activos totales: {int(socios_activos)}
+                - Penetración Club: {pct_penetracion}%
+                - Kg vendidos por club: {kg_club:,.0f}
+
+                SOCIOS CANDIDATOS PARA ESTA ACCIÓN:
+                - Total candidatos: {len(candidatos)}
+                - Distribución por ocasión: {candidatos['Ocasion de consumo'].value_counts().to_dict()}
+                - Recencia promedio: {candidatos['Dias desde ultima compra'].mean():.0f} días sin comprar
+                - Frecuencia promedio: {candidatos['frecuencia'].mean():.1f} compras por año
+                - Kg promedio: {candidatos['Kilos'].mean():.1f} kg
+                - Riesgo de abandono promedio: {candidatos['p_alive'].mean():.2f}
+                - Top 5 productos favoritos: {candidatos['ProductoFavorito'].value_counts().head(5).to_dict()}
+                - Top 3 líneas favoritas: {candidatos['LineaProdFav'].value_counts().head(3).to_dict()}
+
+                CONTEXTO ADICIONAL:
+                - Socios con riesgo ALTO (p_alive < 0.3): {len(candidatos[candidatos['p_alive'] < 0.3])}
+                - Socios con riesgo MEDIO (0.3-0.7): {len(candidatos[(candidatos['p_alive'] >= 0.3) & (candidatos['p_alive'] <= 0.7)])}
+                - Socios con riesgo BAJO (> 0.7): {len(candidatos[candidatos['p_alive'] > 0.7])}
+                - Recencia mínima: {candidatos['Dias desde ultima compra'].min():.0f} días
+                - Recencia máxima: {candidatos['Dias desde ultima compra'].max():.0f} días
+                - Tiene App (% de candidatos): {(candidatos['Tiene App'] == 'Si').sum() / len(candidatos) * 100:.0f}%
+                """
+ 
+                prompt_sistema = f"""Sos un experto en marketing de retail para heladerías en Argentina.
+                Trabajás para Grido, la cadena de heladerías más grande de Argentina.
+                Tu tarea es generar una recomendación comercial ESPECÍFICA y ACCIONABLE para un franquiciado.
+
+                REGLAS IMPORTANTES:
+                - Usá los datos concretos que te paso (cantidades, porcentajes, productos favoritos) en tu respuesta.
+                - La promoción debe ser DIFERENTE según el objetivo:
+                * "Recuperar inactivos": enfocate en urgencia y nostalgia, mencioná cuántos días promedio llevan sin comprar.
+                * "Premiar fieles": enfocate en exclusividad y agradecimiento, mencioná su frecuencia de compra.
+                * "Aumentar ticket promedio": sugerí combos o upgrades de formato, mencioná el kg promedio actual.
+                * "Liquidar stock": enfocate en precio agresivo y escasez, promos flash de 48-72hs.
+                - Mencioná los productos favoritos de los candidatos para personalizar la promo.
+                - Si muchos candidatos tienen app ({candidatos['Tiene App'].sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal push/app.
+                - Respondé en español argentino, de forma directa y práctica.
+
+                Estructurá tu respuesta EXACTAMENTE con estos 4 bloques:
+
+                **📱 MENSAJE PROMOCIONAL**
+                Un mensaje corto listo para enviar por WhatsApp. Máximo 3 líneas. Debe ser DISTINTO según el objetivo y mencionar datos reales (ej: el producto favorito de estos socios).
+
+                **📧 ASUNTO DE EMAIL**
+                Una línea de asunto atractiva, personalizada al objetivo y productos.
+
+                **📋 JUSTIFICACIÓN**
+                En 3-4 oraciones explicá por qué estos socios son los candidatos ideales. Usá números concretos de los datos proporcionados.
+
+                **📊 PLAN DE ACCIÓN**
+                - Canal recomendado y por qué
+                - Vigencia sugerida (distinta según objetivo)
+                - Tipo de descuento o beneficio concreto
+                - Resultado esperado (estimá en kg o socios reactivados usando los datos)
+                """
+ 
+                with st.spinner("🧠 Generando recomendación..."):
+                    try:
+                        client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
+                        response = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=[
+                                {"role": "system", "content": prompt_sistema},
+                                {"role": "user", "content": resumen_datos},
+                            ],
+                            temperature=0.7,
+                            max_tokens=800,
+                        )
+                        respuesta = response.choices[0].message.content
+ 
+                        # Mostrar respuesta del LLM
+                        st.markdown(
+                            f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
+                            f"border-radius:12px; padding:20px; margin-bottom:16px;'>"
+                            f"<div style='font-size:11px; color:{NARANJA}; text-transform:uppercase; "
+                            f"letter-spacing:0.1em; margin-bottom:12px;'>Recomendación generada por IA</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(respuesta)
+ 
+                    except Exception as e:
+                        st.error(f"Error al conectar con Groq: {str(e)}")
+                        st.info("Verificá que la API key de Groq esté configurada en Settings → Secrets con el nombre GROQ_API_KEY")
+ 
+                # Tabla de socios candidatos (siempre se muestra, independiente del LLM)
+                st.markdown("---")
+                st.markdown("##### 📋 Lista de socios candidatos")
+                st.caption(f"{len(candidatos)} socios · Ordenados por riesgo de abandono (mayor primero)")
+ 
+                tabla_candidatos = (
+                    candidatos.sort_values("p_alive", ascending=True)
+                    [["DNI", "Ocasion de consumo", "Kilos", "Cantidad de compras",
+                      "Dias desde ultima compra", "p_alive", "ProductoFavorito", "LineaProdFav"]]
+                    .copy()
+                )
+                tabla_candidatos["Kilos"] = tabla_candidatos["Kilos"].round(1)
+                tabla_candidatos["Dias desde ultima compra"] = tabla_candidatos["Dias desde ultima compra"].round(0).astype(int)
+                tabla_candidatos["Riesgo"] = tabla_candidatos["p_alive"].apply(
+                    lambda p: "🔴 Alto" if p < 0.3 else ("🟡 Medio" if p <= 0.7 else "🟢 Bajo")
+                )
+                tabla_candidatos.rename(columns={
+                    "DNI": "Cliente",
+                    "Ocasion de consumo": "Ocasión",
+                    "Kilos": "Kg/año",
+                    "Cantidad de compras": "Compras",
+                    "Dias desde ultima compra": "Días s/compra",
+                    "ProductoFavorito": "Prod. Favorito",
+                    "LineaProdFav": "Línea Fav.",
+                }, inplace=True)
+                tabla_candidatos.drop(columns=["p_alive"], inplace=True)
+ 
+                st.dataframe(
+                    tabla_candidatos,
+                    hide_index=True,
+                    use_container_width=True,
+                    height=400,
+                )
+ 
+                # Botón para descargar lista
+                csv = tabla_candidatos.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "📥 Descargar lista de socios (CSV)",
+                    data=csv,
+                    file_name=f"socios_promo_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+ 
+            elif not generar:
+                st.markdown(
+                    "<div style='display:flex; align-items:center; justify-content:center; "
+                    "height:400px; color:rgba(255,255,255,0.3); font-size:14px; text-align:center;'>"
+                    "👈 Seleccioná productos y objetivo,<br>luego hacé click en <b>Generar promoción</b>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
