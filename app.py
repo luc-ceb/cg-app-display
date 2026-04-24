@@ -263,9 +263,19 @@ with st.sidebar:
     if selected_localidad != "Todas":
         filtered_franq = filtered_franq[filtered_franq["localidad"] == selected_localidad]
 
+    FRANQUICIAS_DESTACADAS = ["3183","3008", "4444", "4552", "4489", "4544", "3875", "3807", 
+                              "4248", "4201", "5462", "3835", "4340", "3212", "3006"]
+
+    # Filtrar solo las franquicias destacadas si existen en el filtro actual
+    destacadas = filtered_franq[filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
+    otras = filtered_franq[~filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
+
+    # Primero las destacadas, luego el resto
+    franq_ordenadas = pd.concat([destacadas, otras])
+
     branch_options = {
         row.branchofficeid: f"{row.numero}-{row.heladeria} — {row.localidad}"
-        for _, row in filtered_franq.iterrows()
+        for _, row in franq_ordenadas.iterrows()
     }
 
     selected_bid = st.selectbox(
@@ -273,7 +283,6 @@ with st.sidebar:
         options=list(branch_options.keys()),
         format_func=lambda x: branch_options[x],
     )
-
 
     st.markdown("---")
     st.markdown(
@@ -307,6 +316,13 @@ st.markdown(f"""
 # FILTER DATA FOR SELECTED BRANCH
 # ─────────────────────────────────────────────
 b_data = load_branch(selected_bid)
+if len(b_data) > 0 and "email" in b_data.columns:
+    b_data["email"] = [f"email-ejemplo-{np.random.randint(10000, 99999)}@gmail.com" for _ in range(len(b_data))]
+if len(b_data) > 0 and "PhoneNumber1" in b_data.columns:
+    b_data["PhoneNumber1"] = [f"54-{np.random.randint(100, 999)}-{np.random.randint(1000000, 9999999)}" for _ in range(len(b_data))]
+
+# Reemplazar nulos con N/A
+b_data = b_data.fillna("N/A")
 
 # ─────────────────────────────────────────────
 # KPIs
@@ -851,27 +867,32 @@ with tab2:
               "LineaProdFav","PhoneNumber1", "email","p_alive"]]
         )
         valiosos["p_alive"] = valiosos["p_alive"].apply(lambda x: f"{x:.1%}")
-        valiosos.rename(columns={'LineaProdFav':'Linea Producto Favorito','PhoneNumber1':'Telefono','frecuencia':'Frecuencia de compra (dias)'},inplace=True)
-        valiosos['Kilos'] = valiosos['Kilos'].round(2)
+        valiosos.rename(columns={'LineaProdFav':'Linea Producto Favorito','Kilos':'Kg/año','PhoneNumber1':'Telefono','frecuencia':'Frecuencia de compra (dias)'},inplace=True)
+        valiosos['Kg/año'] = valiosos['Kg/año'].round(2)
         valiosos.drop(columns=['p_alive'],inplace=True)
         st.dataframe(valiosos, hide_index=True, use_container_width=True)
 
         st.divider()
-        st.markdown("##### Clientes con Mayor Riesgo de Abandono")
+        st.markdown("##### Clientes con alto riesgo de abandono o que ya abandonaron")
         top_churn = (
-            b_data[b_data.categoria!='ABANDONO'].sort_values("p_alive", ascending=True)
+            b_data[(b_data.categoria!='ABANDONO') & (b_data.Kilos>=2)].sort_values("p_alive", ascending=True)
             .head(20)
-            [["Nombre", "Dias desde ultima compra", "frecuencia", "Kilos",
+            [["Nombre", "Dias desde ultima compra", "Cantidad de compras", "Kilos",
             "p_alive", "estado", "Ocasion de consumo", "Tiene App",
             "Dias desde ultimo ingreso app", "PhoneNumber1", "email" ,"ProductoFavorito",'LineaProdFav']]
             .copy()
         )
+        top_churn['Frecuencia de compra (dias)'] = np.where(
+            top_churn['Cantidad de compras'] > 0,
+            (365 / top_churn['Cantidad de compras']).round(0),
+            top_churn['Dias desde ultima compra']
+        )
         top_churn["p_alive"] = top_churn["p_alive"].apply(lambda x: f"{x:.1%}")
         top_churn["Kilos"] = top_churn["Kilos"].round(1)
         top_churn .rename(columns={
-            "Nombre": "Cliente",
+            
             "Dias desde ultima compra": "Días sin comprar",
-            "frecuencia": "Compras",
+            "Cantidad de compras": "Compras por año",
             "Kilos": "Kg/año",
             "estado": "Estado",
             "Ocasion de consumo": "Ocasión",
@@ -882,7 +903,7 @@ with tab2:
             "ProductoFavorito":"Producto Favorito",
             "LineaProdFav":"Linea Producto Favorito"
         }, inplace=True)
-        top_churn .drop(columns=['p_alive'],inplace=True) 
+        top_churn .drop(columns=['p_alive','Frecuencia de compra (dias)'],inplace=True) 
 
         st.dataframe(
             top_churn,
@@ -893,7 +914,7 @@ with tab2:
                 "Kg/año": st.column_config.ProgressColumn(
                     "Kg/año", min_value=0, max_value=float(b_data["Kilos"].max()),
                     format="%.1f",
-                ),
+                ),  
             },
         )
 
@@ -910,10 +931,10 @@ with tab3:
         """
         <div style="color:rgba(255,255,255,0.7); font-size:13px; line-height:1.6; margin:8px 0 20px 0;">
             🎯 <b>¿Por qué te compran tus socios?</b> Esta segmentación agrupa a los clientes
-            según la <b>ocasión de consumo</b> dominante en sus compras — el tipo de momento
-            o necesidad que el helado cubre para ellos. No todos compran igual: algunos lo hacen
-            para abastecer la heladera de casa, otros para regalar, otros como antojo individual
-            o para celebraciones. Entender estos perfiles te permite <b>comunicarte mejor con cada grupo</b>,
+            según la <b>ocasión de consumo</b> dominante en sus compras —el tipo de momento
+            o necesidad que el helado cubre para ellos-.<br> No todos compran igual: algunos lo hacen
+            para abastecer la heladera de casa, otros para consumir en la franquicia, otros como antojo individual
+            o para celebraciones. <br>Entender estos perfiles te permite <b>comunicarte mejor con cada grupo</b>,
             diseñar promociones más relevantes y anticipar qué productos impulsar según el tipo de socio.
         </div>
         """,
@@ -986,7 +1007,7 @@ with tab3:
                 **PLOTLY_LAYOUT,
                 height=380,
                 xaxis_title="Kg promedio",
-                title=dict(text="Consumo Promedio por Ocasión", font=dict(size=14)),
+                title=dict(text="Consumo Promedio por Ocasión - Indica el consumo total de helado/alimento congelado", font=dict(size=14)),
             )
             st.plotly_chart(fig_kg, use_container_width=True)
 
@@ -996,12 +1017,12 @@ with tab3:
             seg_summary = (
                 b_data.groupby("Ocasion de consumo")
                 .agg(
-                    Clientes=("CustomerId", "count"),
+                    Socios=("CustomerId", "count"),
                     Kg_Promedio=("Kilos", "mean"),
                     Compras_Promedio=("Cantidad de compras", "mean"),
                     P_alive_Promedio=("p_alive", "mean"),
                 )
-                .sort_values("Clientes", ascending=False)
+                .sort_values("Socios", ascending=False)
                 .reset_index()
                 .rename(columns={"Ocasion de consumo": "Segmento"})
             )
@@ -1013,17 +1034,16 @@ with tab3:
 
             st.dataframe(
                 seg_summary[[
-                    "Segmento", "Clientes", "Kg_Promedio",
+                    "Segmento", "Socios", "Kg_Promedio",
                     "Compras_Promedio"
                 ]].rename(columns={'Compras_Promedio':'Compras por año','Kg_Promedio':'Kilos consumidos promedio por año'}),
                 hide_index=True,
                 use_container_width=True,
-                height=380,
                 column_config={
-                    "Clientes": st.column_config.ProgressColumn(
-                        "Clientes",
+                    "Socios": st.column_config.ProgressColumn(
+                        "Socios",
                         min_value=0,
-                        max_value=int(seg_summary["Clientes"].max()),
+                        max_value=int(seg_summary["Socios"].max()),
                         format="%d",
                     ),
                 },
@@ -1036,7 +1056,9 @@ with tab4:
     st.markdown("#### Gestioná con Club Grido")
     st.caption("Herramientas de gestión para tu comunidad de socios.")
 
-    # TODO: contenido de la tab
+    col_l, col_c, col_r = st.columns([1, 3, 1])
+    with col_c:
+        st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
 
 
 # ═══════════════════════════════════════════════
@@ -1045,10 +1067,11 @@ with tab4:
 
 # Mapeo línea de producto → ocasiones de consumo afines
 PRODUCTO_OCASION = {
-    "Pote/Familiar": ["Stock/Abastecimiento", "Social/Eventos"],
-    "Granel": ["Stock/Abastecimiento", "Social/Eventos"],
-    "Tortas": ["Social/Eventos"],
-    "Palitos/Bombones": ["Individual", "Familia/Niños"],
+    "Pote/Familiar": ["Stock / Abastecimiento", "Social / Eventos"],
+    "Granel": ["Stock / Abastecimiento", "Social / Eventos"],
+    "Bombones" : ["Stock / Abastecimiento", "Social / Eventos"],
+    "Tortas / Postres": ["Social / Eventos"],
+    "Palitos": ["Individual", "Familia / Niños"],
     "Consumo en mostrador": ["Consumo en Local"],
     "Alimento Congelado": ["Alimento Congelado"],
 }
@@ -1102,13 +1125,13 @@ with tab5:
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                     & (b_data["p_alive"] < 0.85)
                 ]
-                filtro_desc = "Riesgo medio/alto (P(alive) < 0.85)"
+                filtro_desc = "Riesgo de abandono medio/alto"
             elif objetivo_sel == "Premiar socios fieles":
                 candidatos = b_data[
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                     & (b_data["p_alive"] >= 0.85)
                 ]
-                filtro_desc = "Socios activos (P(alive) ≥ 0.85)"
+                filtro_desc = "Socios activos - bajo riesgo de abandono"
             elif objetivo_sel == "Aumentar ticket promedio":
                 mediana_kg = b_data["Kilos"].median()
                 candidatos = b_data[
@@ -1195,12 +1218,12 @@ with tab5:
                 REGLAS IMPORTANTES:
                 - Usá los datos concretos que te paso (cantidades, porcentajes, productos favoritos) en tu respuesta.
                 - La promoción debe ser DIFERENTE según el objetivo:
-                * "Recuperar inactivos": enfocate en urgencia y nostalgia, mencioná cuántos días promedio llevan sin comprar.
-                * "Premiar fieles": enfocate en exclusividad y agradecimiento, mencioná su frecuencia de compra.
+                * "Recuperar inactivos": enfocate en urgencia y nostalgia, no menciones cuántos días promedio llevan sin comprar solo si llevan muchos o pocos dias sin comprar.
+                * "Premiar fieles": enfocate en exclusividad y agradecimiento, mencioná si su frecuencia de compra es alta o baja, no des cifras específicas.
                 * "Aumentar ticket promedio": sugerí combos o upgrades de formato, mencioná el kg promedio actual.
                 * "Liquidar stock": enfocate en precio agresivo y escasez, promos flash de 48-72hs.
                 - Mencioná los productos favoritos de los candidatos para personalizar la promo.
-                - Si muchos candidatos tienen app ({candidatos['Tiene App'].sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal push/app.
+                - Si muchos candidatos tienen app ({candidatos['Tiene App'].sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal de venta por app pero no menciones la posibilidad de enviar push por app.
                 - Respondé en español argentino, de forma directa y práctica.
 
                 Estructurá tu respuesta EXACTAMENTE con estos 4 bloques:
@@ -1253,13 +1276,12 @@ with tab5:
                 # Tabla de socios candidatos (siempre se muestra, independiente del LLM)
                 st.markdown("---")
                 st.markdown("##### 📋 Lista de socios candidatos")
-                st.caption(f"{len(candidatos)} socios · Ordenados por riesgo de abandono (mayor primero)")
+                st.caption(f"{len(candidatos)} socios")
  
                 tabla_candidatos = (
-                    candidatos.sort_values("p_alive", ascending=True)
-                    [["DNI", "Ocasion de consumo", "Kilos", "Cantidad de compras",
+                    candidatos[["Nombre",'email','PhoneNumber1', "Ocasion de consumo", "Kilos", "Cantidad de compras",
                       "Dias desde ultima compra", "p_alive", "ProductoFavorito", "LineaProdFav"]]
-                    .copy()
+                    .copy() #.sort_values("p_alive", ascending=True)
                 )
                 tabla_candidatos["Kilos"] = tabla_candidatos["Kilos"].round(1)
                 tabla_candidatos["Dias desde ultima compra"] = tabla_candidatos["Dias desde ultima compra"].round(0).astype(int)
@@ -1267,13 +1289,14 @@ with tab5:
                     lambda p: "🔴 Alto" if p < 0.3 else ("🟡 Medio" if p <= 0.7 else "🟢 Bajo")
                 )
                 tabla_candidatos.rename(columns={
-                    "DNI": "Cliente",
+                    "Nombre": "Socio",
+                    "email":"Email",
+                    "PhoneNumber1":"Nro telefono",
                     "Ocasion de consumo": "Ocasión",
                     "Kilos": "Kg/año",
-                    "Cantidad de compras": "Compras",
-                    "Dias desde ultima compra": "Días s/compra",
-                    "ProductoFavorito": "Prod. Favorito",
-                    "LineaProdFav": "Línea Fav.",
+                    "Cantidad de compras": "Compras por año",
+                    "ProductoFavorito": "Producto favorito",
+                    "LineaProdFav": "Línea de producto favorito",
                 }, inplace=True)
                 tabla_candidatos.drop(columns=["p_alive"], inplace=True)
  
