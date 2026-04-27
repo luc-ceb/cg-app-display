@@ -9,7 +9,8 @@ import numpy as np
 import plotly.graph_objects as go
 import pydeck as pdk
 import base64
-from groq import Groq
+#from groq import Groq
+from anthropic import Anthropic
 
 import os
 
@@ -1099,7 +1100,7 @@ with tab5:
         col_input, col_output = st.columns([1, 2])
  
         with col_input:
-            st.markdown("##### 📦 ¿Qué productos querés vender?")
+            st.markdown("##### 📦 ¿Qué tipo de productos querés impulsar?")
             productos_sel = st.multiselect(
                 "Líneas de producto",
                 options=list(PRODUCTO_OCASION.keys()),
@@ -1162,14 +1163,6 @@ with tab5:
                     unsafe_allow_html=True,
                 )
  
-                # Mini resumen por ocasión
-                dist_ocasion = candidatos["Ocasion de consumo"].value_counts()
-                for oc, cnt in dist_ocasion.items():
-                    color = SEGMENT_COLORS.get(oc, GRIS)
-                    st.markdown(
-                        f"<span style='color:{color};'>●</span> {oc}: **{cnt}**",
-                        unsafe_allow_html=True,
-                    )
  
             generar = st.button(
                 "🚀 Generar propuesta comercial",
@@ -1217,6 +1210,7 @@ with tab5:
 
                 REGLAS IMPORTANTES:
                 - Usá los datos concretos que te paso (cantidades, porcentajes, productos favoritos) en tu respuesta.
+                - Nunca especifiques el valor especifico de p_alive, solo si tienen riesgo de abandono alto, medio o bajo.
                 - La promoción debe ser DIFERENTE según el objetivo:
                 * "Recuperar inactivos": enfocate en urgencia y nostalgia, no menciones cuántos días promedio llevan sin comprar solo si llevan muchos o pocos dias sin comprar.
                 * "Premiar fieles": enfocate en exclusividad y agradecimiento, mencioná si su frecuencia de compra es alta o baja, no des cifras específicas.
@@ -1225,6 +1219,18 @@ with tab5:
                 - Mencioná los productos favoritos de los candidatos para personalizar la promo.
                 - Si muchos candidatos tienen app ({candidatos['Tiene App'].sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal de venta por app pero no menciones la posibilidad de enviar push por app.
                 - Respondé en español argentino, de forma directa y práctica.
+
+                REGLAS DE NEGOCIO PARA PROMOCIONES:
+                - NUNCA sugieras regalar productos gratis. Grido es una franquicia y el franquiciado paga el costo del producto.
+                - Los descuentos deben ser sobre VOLUMEN, no sobre unidades sueltas. Ejemplos válidos:
+                  * "20% off en caja de 10 palitos"
+                  * "Llevá 2 potes de 1lt y el 3ro al 50%"
+                  * "15% off en compras mayores a 2kg de granel"
+                - Para líneas individuales (palitos, bombones, alfajores) siempre sugerí descuento por CAJA o PACK, nunca por unidad.
+                - Para potes/familiar siempre sugerí descuento por VOLUMEN (ej: a partir de 2kg), si el objetivo es aumentar ticket promedio sugería algo relacionado al familiar de 3 litros, de lo contrario sugerí algo relacionado al Pote de 1 litro.
+                - Para tortas siempre sugerí combos (ej: torta + 1/2kg de granel).
+                - Los descuentos razonables son: 10-15% para premiar fieles, 20-30% para recuperar inactivos, hasta 40% para liquidar stock.
+                - NUNCA sugieras promos que impliquen pérdida para el franquiciado.
 
                 Estructurá tu respuesta EXACTAMENTE con estos 4 bloques:
 
@@ -1240,24 +1246,24 @@ with tab5:
                 **📊 PLAN DE ACCIÓN**
                 - Canal recomendado y por qué
                 - Vigencia sugerida (distinta según objetivo)
-                - Tipo de descuento o beneficio concreto
-                - Resultado esperado (estimá en kg o socios reactivados usando los datos)
+                - Tipo de descuento o beneficio concreto: Solo genera una propuesta.
+                - Resultado esperado (estimá en kg o socios reactivados usando los datos, aclara que es un aproximado)
                 """
  
                 with st.spinner("🧠 Generando recomendación..."):
                     try:
-                        client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
-                        response = client.chat.completions.create(
-                            model="llama-3.3-70b-versatile",
-                            messages=[
-                                {"role": "system", "content": prompt_sistema},
-                                {"role": "user", "content": resumen_datos},
-                            ],
-                            temperature=0.7,
-                            max_tokens=800,
+                        client = Anthropic(api_key = st.secrets.get("ANTHROPIC_API_KEY", ""))
+                        response = client.messages.create(
+                                model="claude-sonnet-4-6",
+                                system=prompt_sistema,
+                                messages=[
+                                    {"role":"user" , "content":resumen_datos},
+                                ],
+                                temperature = 0.7 ,
+                                max_tokens=800,
                         )
-                        respuesta = response.choices[0].message.content
- 
+                        respuesta = response.content[0].text
+
                         # Mostrar respuesta del LLM
                         st.markdown(
                             f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
@@ -1270,8 +1276,9 @@ with tab5:
                         st.markdown(respuesta)
  
                     except Exception as e:
-                        st.error(f"Error al conectar con Groq: {str(e)}")
-                        st.info("Verificá que la API key de Groq esté configurada en Settings → Secrets con el nombre GROQ_API_KEY")
+                        st.error(f"Error al conectar con el servidor proveedor de la inferencia LLM: {str(e)}")
+                        st.info("Verificá que la API key esté configurada")
+                        
  
                 # Tabla de socios candidatos (siempre se muestra, independiente del LLM)
                 st.markdown("---")
