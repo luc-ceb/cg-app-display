@@ -212,9 +212,17 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    /* Filter labels */
+    .stMultiSelect label, .stSelectbox label, .stSlider label {
+        font-size: 8px !important;
+        font-weight: 400 !important;
+        color: rgba(255,255,255,0.7) !important;
+    }
+            
+
 </style>
 """, unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────
 # DATA LOADING
@@ -408,8 +416,8 @@ tab1, tab2, tab3 ,tab4 , tab5 = st.tabs([
     "📍 Mi Comunidad",
     "💓 Estado de Socios",
     "🍦 Ocasión de Consumo",
-    "🎯 Gestioná con Club Grido",
     "🤖 Asistente Comercial",
+    "🎯 Gestioná con Club Grido",
 ])
 
 
@@ -428,7 +436,7 @@ with tab1:
     color_delta = VERDE if pct_incremento >= 0 else ROJO
 
     # --- Encabezado: KPI + distribuciones ---
-    col_kpi, col_dist_ocasion, col_dist_estado, col_dist_app = st.columns([1.2, 1, 1, 1])
+    col_kpi, col_dist_estado, col_dist_app = st.columns([1.2, 1, 1])
 
     with col_kpi:
         st.markdown(
@@ -465,32 +473,10 @@ with tab1:
             unsafe_allow_html=True,
         )
 
-    with col_dist_ocasion:
-        ocasion_counts = b_data["Ocasion de consumo"].value_counts()
-        colors_ocasion = [OCASION_COLORS.get(o, GRIS) for o in ocasion_counts.index]
-
-        fig_ocasion = go.Figure(data=[go.Pie(
-            labels=ocasion_counts.index,
-            values=ocasion_counts.values,
-            hole=0.6,
-            marker=dict(colors=colors_ocasion, line=dict(color=AZUL_OSCURO, width=2)),
-            textinfo="percent",
-            textfont=dict(size=10),
-            hovertemplate="<b>%{label}</b><br>%{value} clientes<br>%{percent}<extra></extra>",
-        )])
-        fig_ocasion.update_layout(
-            **{**PLOTLY_LAYOUT, "margin": dict(l=10, r=10, t=35, b=10)},
-            height=200,
-            showlegend=True,
-            legend=dict(
-                orientation="v", yanchor="middle", y=0.5,
-                xanchor="left", x=1.02, font=dict(size=9),
-            ),
-            title=dict(text="Ocasión de Consumo", font=dict(size=13), x=0.02),
-        )
-        st.plotly_chart(fig_ocasion, use_container_width=True)
-
+    
     with col_dist_estado:
+        st.markdown("<p style='font-size:13px; font-weight:600; margin-bottom:0;'>Estado de Socios</p>", unsafe_allow_html=True)
+        
         estado_counts = b_data["estado"].value_counts()
         colors_estado = [ESTADO_COLORS.get(e, GRIS) for e in estado_counts.index]
 
@@ -498,25 +484,35 @@ with tab1:
             labels=[e.replace("_", " ").title() for e in estado_counts.index],
             values=estado_counts.values,
             hole=0.6,
+            domain={'x': [0, 0.65], 'y': [0, 1]}, 
             marker=dict(colors=colors_estado, line=dict(color=AZUL_OSCURO, width=2)),
             textinfo="percent",
             textfont=dict(size=10, color="white"),
             hovertemplate="<b>%{label}</b><br>%{value} clientes<br>%{percent}<extra></extra>",
         )])
+        
+        # Corrección aquí: Combinamos el diccionario antes de desempaquetar
         fig_estado.update_layout(
-            **{**PLOTLY_LAYOUT, "margin": dict(l=10, r=10, t=35, b=10)},
-            height=200,
-            showlegend=True,
-            legend=dict(
-                orientation="v", yanchor="middle", y=0.5,
-                xanchor="left", x=1.02, font=dict(size=9),
-            ),
-            title=dict(text="Estado de Socios", font=dict(size=13), x=0.02),
+            **{**PLOTLY_LAYOUT, 
+               "margin": dict(l=0, r=0, t=10, b=10), 
+               "height": 180,
+               "showlegend": True}
         )
-        st.plotly_chart(fig_estado, use_container_width=True)
+        # Ajuste de leyenda fuera del dict principal para mayor claridad
+        fig_estado.update_layout(
+            legend=dict(
+                orientation="v", 
+                yanchor="middle", y=0.5,
+                xanchor="left", x=0.68, 
+                font=dict(size=10),
+                itemwidth=30,
+            )
+        )
+        st.plotly_chart(fig_estado, use_container_width=True, config={'displayModeBar': False})
 
     with col_dist_app:
-        # Normalizamos por si vienen como bool, int o string
+        st.markdown("<p style='font-size:13px; font-weight:600; margin-bottom:0;'>Penetración en App</p>", unsafe_allow_html=True)
+        
         app_series = b_data["Tiene App"].astype(str).str.strip().str.lower()
         app_map = {
             "true": "Con App", "1": "Con App", "sí": "Con App", "si": "Con App", "yes": "Con App",
@@ -532,22 +528,30 @@ with tab1:
             labels=app_counts.index,
             values=app_counts.values,
             hole=0.6,
+            domain={'x': [0, 0.65], 'y': [0, 1]},
             marker=dict(colors=colors_app, line=dict(color=AZUL_OSCURO, width=2)),
             textinfo="percent",
             textfont=dict(size=10, color="white"),
             hovertemplate="<b>%{label}</b><br>%{value} clientes<br>%{percent}<extra></extra>",
         )])
+        
+        # Corrección aquí también
         fig_app.update_layout(
-            **{**PLOTLY_LAYOUT, "margin": dict(l=10, r=10, t=35, b=10)},
-            height=200,
-            showlegend=True,
-            legend=dict(
-                orientation="v", yanchor="middle", y=0.5,
-                xanchor="left", x=1.02, font=dict(size=9),
-            ),
-            title=dict(text="Penetración de socios en App 📱", font=dict(size=13), x=0.02),
+            **{**PLOTLY_LAYOUT, 
+               "margin": dict(l=0, r=0, t=10, b=10), 
+               "height": 180,
+               "showlegend": True}
         )
-        st.plotly_chart(fig_app, use_container_width=True)
+        fig_app.update_layout(
+            legend=dict(
+                orientation="v", 
+                yanchor="middle", y=0.5,
+                xanchor="left", x=0.68, 
+                font=dict(size=10),
+                itemwidth=30,
+            )
+        )
+        st.plotly_chart(fig_app, use_container_width=True, config={'displayModeBar': False})
 
     st.divider()
 
@@ -558,20 +562,12 @@ with tab1:
     col_filtros, col_map = st.columns([1, 3])
 
     with col_filtros:
-        # Segment filter
-        all_segments = sorted(b_data["Ocasion de consumo"].dropna().unique().tolist())
-        seg_filter = st.multiselect(
-            "🎯 Filtrar por segmento",
-            options=all_segments,
-            default=all_segments,
-            key="map_seg_filter",
-        )
-
+        st.markdown("<div style='height:75px'></div>", unsafe_allow_html=True)
         # Kg range filter
         kg_min = float(b_data["Kilos"].min()) if n_total > 0 else 0.0
         kg_max = float(b_data["Kilos"].max()) if n_total > 0 else 1.0
         kg_range = st.slider(
-            "Rango de Kg comprados",
+            "Filtrar por Kg comprados por año",
             min_value=kg_min,
             max_value=kg_max,
             value=(kg_min, kg_max),
@@ -600,7 +596,7 @@ with tab1:
         )
 
         filtered = b_data[
-            (b_data["Ocasion de consumo"].isin(seg_filter)) &
+            
             (b_data["Kilos"] >= kg_range[0]) &
             (b_data["Kilos"] <= kg_range[1]) &
             (b_data["Dias desde ultima compra"] >= dias_range[0]) &
@@ -770,8 +766,8 @@ with tab1:
         else:
             st.warning("No hay clientes con coordenadas válidas para este punto de venta.")
         
-        st .divider()
-        mostrar_leyenda_ocasiones(b_data)
+    st .divider()
+    mostrar_leyenda_ocasiones(b_data)
 
 
 # ═══════════════════════════════════════════════
@@ -794,43 +790,39 @@ with tab2:
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
     else:
-        col_detail,col_chart = st.columns([1, 1])
+        st.markdown("##### Resumen de la franquicia")
+        col_a, col_b, col_c = st .columns(3)
+        # Clientes que requieren acción inmediata
+        en_peligro = ((b_data["estado"] == "En riesgo") | (b_data["estado"] == "Abandonado")).sum()
+        pct_peligro = en_peligro / len(b_data) * 100
 
-        with col_detail:
-            st.markdown("##### Resumen de la franquicia")
-            col_a, col_b, col_c = st .columns(3)
-            # Clientes que requieren acción inmediata
-            en_peligro = ((b_data["estado"] == "En riesgo") | (b_data["estado"] == "Abandonado")).sum()
-            pct_peligro = en_peligro / len(b_data) * 100
-
-            col_a.metric(
+        col_a.metric(
                 "🚨 Requieren acción",
                 f"{en_peligro}",
                 f"{pct_peligro:.0f}% de la cartera",
                 delta_color="off",
             )
-            col_c.metric(
+        col_c.metric(
                 "📅 Recencia promedio",
                 f"{b_data['Dias desde ultima compra'].mean():.0f} días",
                 help="Días promedio desde la última compra",
             )
 
-            # Penetración app: relevante para estrategia digital
-            con_app = (b_data["Tiene App"].astype(str).str.lower().isin(["true", "1", "si", "sí"])).sum()
-            col_b .metric(
+        # Penetración app: relevante para estrategia digital
+        con_app = (b_data["Tiene App"].astype(str).str.lower().isin(["true", "1", "si", "sí"])).sum()
+        col_b .metric(
                 "📱 Penetración app",
                 f"{con_app / len(b_data):.0%}",
                 help="% de socios con la app instalada",
             )
 
-        with col_chart:
-            st.markdown("##### Distribución por estado")
-            # Stacked bar — estado distribution
-            estado_counts = b_data["estado"].value_counts().reindex(
+        st.markdown("##### Distribución por estado")
+        # Stacked bar — estado distribution
+        estado_counts = b_data["estado"].value_counts().reindex(
                 ["Activo", "En riesgo", "Abandonado"], fill_value=0
             )
-            fig_estado = go.Figure()
-            for estado, count in estado_counts.items():
+        fig_estado = go.Figure()
+        for estado, count in estado_counts.items():
                 fig_estado.add_trace(go.Bar(
                     x=[count], y=["Socios"], orientation="h",
                     name=estado.replace("_", " ").title(),
@@ -839,7 +831,7 @@ with tab2:
                     textposition="inside",
                     textfont=dict(size=13, color="white"),
                 ))
-            fig_estado.update_layout(
+        fig_estado.update_layout(
                 **PLOTLY_LAYOUT,
                 barmode="stack",
                 showlegend=True,
@@ -849,7 +841,7 @@ with tab2:
                 xaxis=dict(visible=False),
                 #title=dict(text="Distribución por Estado", font=dict(size=14)),
             )
-            st.plotly_chart(fig_estado, use_container_width=True)
+        st.plotly_chart(fig_estado, use_container_width=True)
 
         st.divider()
         st.markdown("##### 💎 Socios valiosos en riesgo")
@@ -931,9 +923,9 @@ with tab3:
     st.markdown(
         """
         <div style="color:rgba(255,255,255,0.7); font-size:13px; line-height:1.6; margin:8px 0 20px 0;">
-            🎯 <b>¿Por qué te compran tus socios?</b> Esta segmentación agrupa a los clientes
+            🎯 <b>¿Por qué te compran tus socios?</b><br> Esta segmentación agrupa a los clientes
             según la <b>ocasión de consumo</b> dominante en sus compras —el tipo de momento
-            o necesidad que el helado cubre para ellos-.<br> No todos compran igual: algunos lo hacen
+            o necesidad que el helado cubre para ellos-.<br> No todos compran igual, algunos lo hacen
             para abastecer la heladera de casa, otros para consumir en la franquicia, otros como antojo individual
             o para celebraciones. <br>Entender estos perfiles te permite <b>comunicarte mejor con cada grupo</b>,
             diseñar promociones más relevantes y anticipar qué productos impulsar según el tipo de socio.
@@ -984,18 +976,13 @@ with tab3:
 
         st.divider()
 
-        # ───────── FILA 2 ─────────
-        row2_col1, row2_col2 = st.columns([1, 1])
-
-        # [Fila 2 · Col 1] Barras de kg promedio por segmento
-        with row2_col1:
-            st.markdown("##### Kg Promedio por Segmento")
-            seg_kg = (
+        st.markdown("##### Kg Promedio por Segmento")
+        seg_kg = (
                 b_data.groupby("Ocasion de consumo")["Kilos"]
                 .mean()
                 .sort_values(ascending=True)
             )
-            fig_kg = go.Figure(data=[go.Bar(
+        fig_kg = go.Figure(data=[go.Bar(
                 y=seg_kg.index,
                 x=seg_kg.values.round(1),
                 orientation="h",
@@ -1004,18 +991,16 @@ with tab3:
                 textposition="outside",
                 textfont=dict(size=12, color="#e8ecf4"),
             )])
-            fig_kg.update_layout(
+        fig_kg.update_layout(
                 **PLOTLY_LAYOUT,
                 height=380,
                 xaxis_title="Kg promedio",
                 title=dict(text="Consumo Promedio por Ocasión - Indica el consumo total de helado/alimento congelado", font=dict(size=14)),
             )
-            st.plotly_chart(fig_kg, use_container_width=True)
+        st.plotly_chart(fig_kg, use_container_width=True)
 
-        # [Fila 2 · Col 2] Tabla de métricas por segmento
-        with row2_col2:
-            st.markdown("##### Métricas por Segmento")
-            seg_summary = (
+        st.markdown("##### Métricas por Segmento")
+        seg_summary = (
                 b_data.groupby("Ocasion de consumo")
                 .agg(
                     Socios=("CustomerId", "count"),
@@ -1027,13 +1012,13 @@ with tab3:
                 .reset_index()
                 .rename(columns={"Ocasion de consumo": "Segmento"})
             )
-            seg_summary["Kg_Promedio"] = seg_summary["Kg_Promedio"].round(2)
-            seg_summary["Compras_Promedio"] = seg_summary["Compras_Promedio"].round(1)
-            seg_summary["P_alive_Promedio"] = seg_summary["P_alive_Promedio"].apply(
+        seg_summary["Kg_Promedio"] = seg_summary["Kg_Promedio"].round(2)
+        seg_summary["Compras_Promedio"] = seg_summary["Compras_Promedio"].round(1)
+        seg_summary["P_alive_Promedio"] = seg_summary["P_alive_Promedio"].apply(
                 lambda x: f"{x:.1%}"
             )
 
-            st.dataframe(
+        st.dataframe(
                 seg_summary[[
                     "Segmento", "Socios", "Kg_Promedio",
                     "Compras_Promedio"
@@ -1049,18 +1034,6 @@ with tab3:
                     ),
                 },
             )
-
-# ═══════════════════════════════════════════════
-# TAB 4 — GESTIONÁ CON CLUB GRIDO
-# ═══════════════════════════════════════════════
-with tab4:
-    st.markdown("#### Gestioná con Club Grido")
-    st.caption("Herramientas de gestión para tu comunidad de socios.")
-
-    col_l, col_c, col_r = st.columns([1, 3, 1])
-    with col_c:
-        st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
-
 
 # ═══════════════════════════════════════════════
 # TAB 4 — GESTIONÁ CON CLUB GRIDO
@@ -1084,7 +1057,7 @@ OBJETIVOS = [
     "Liquidar stock",
 ]
  
-with tab5:
+with tab4:
     st.markdown("#### 🤖 Asistente Comercial Inteligente - Versión de prueba -")
     st.markdown(
         "<div style='font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:20px;'>"
@@ -1097,9 +1070,9 @@ with tab5:
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
     else:
-        col_input, col_output = st.columns([1, 2])
+        col_1, col_2,col_3 = st.columns( 3 )
  
-        with col_input:
+        with col_1:
             st.markdown("##### 📦 ¿Qué tipo de productos querés impulsar?")
             productos_sel = st.multiselect(
                 "Líneas de producto",
@@ -1107,7 +1080,7 @@ with tab5:
                 default=["Pote/Familiar"],
                 key="agent_productos",
             )
- 
+        with col_2:
             st.markdown("##### 🎯 ¿Cuál es el objetivo?")
             objetivo_sel = st.radio(
                 "Objetivo comercial",
@@ -1115,42 +1088,42 @@ with tab5:
                 key="agent_objetivo",
             )
  
-            # Filtrar socios candidatos con pandas
-            ocasiones_afines = []
-            for prod in productos_sel:
+        # Filtrar socios candidatos con pandas
+        ocasiones_afines = []
+        for prod in productos_sel:
                 ocasiones_afines.extend(PRODUCTO_OCASION.get(prod, []))
-            ocasiones_afines = list(set(ocasiones_afines))
+        ocasiones_afines = list(set(ocasiones_afines))
  
-            if objetivo_sel == "Recuperar socios inactivos":
+        if objetivo_sel == "Recuperar socios inactivos":
                 candidatos = b_data[
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                     & (b_data["p_alive"] < 0.85)
                 ]
                 filtro_desc = "Riesgo de abandono medio/alto"
-            elif objetivo_sel == "Premiar socios fieles":
+        elif objetivo_sel == "Premiar socios fieles":
                 candidatos = b_data[
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                     & (b_data["p_alive"] >= 0.85)
                 ]
                 filtro_desc = "Socios activos - bajo riesgo de abandono"
-            elif objetivo_sel == "Aumentar ticket promedio":
+        elif objetivo_sel == "Aumentar ticket promedio":
                 mediana_kg = b_data["Kilos"].median()
                 candidatos = b_data[
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                     & (b_data["Kilos"] <= mediana_kg)
                 ]
                 filtro_desc = f"Socios con consumo ≤ {mediana_kg:.1f} kg (bajo la mediana)"
-            elif objetivo_sel == "Liquidar stock":
+        elif objetivo_sel == "Liquidar stock":
                 candidatos = b_data[
                     (b_data["Ocasion de consumo"].isin(ocasiones_afines))
                 ]
                 filtro_desc = "Todos los socios de las ocasiones afines"
-            else:
+        else:
                 candidatos = pd.DataFrame()
                 filtro_desc = ""
  
+        with col_3:
             # Mostrar resumen de candidatos
-            st.markdown("---")
             st.markdown("##### 📊 Socios candidatos")
             st.metric("Total candidatos", len(candidatos))
  
@@ -1164,15 +1137,14 @@ with tab5:
                 )
  
  
-            generar = st.button(
+        generar = st.button(
                 "🚀 Generar propuesta comercial",
                 use_container_width=True,
                 type="primary",
                 disabled=len(candidatos) == 0 or len(productos_sel) == 0,
-            )
+        )
  
-        with col_output:
-            if generar and len(candidatos) > 0:
+        if generar and len(candidatos) > 0:
                 # Construir resumen para el LLM
                 resumen_datos = f"""
                 Franquicia: {branch_info.get('numero', '')}-{branch_info.get('heladeria', '')}
@@ -1324,7 +1296,7 @@ with tab5:
                     use_container_width=True,
                 )
  
-            elif not generar:
+        elif not generar:
                 st.markdown(
                     "<div style='display:flex; align-items:center; justify-content:center; "
                     "height:400px; color:rgba(255,255,255,0.3); font-size:14px; text-align:center;'>"
@@ -1332,3 +1304,15 @@ with tab5:
                     "</div>",
                     unsafe_allow_html=True,
                 )
+
+
+# ═══════════════════════════════════════════════
+# TAB 5 — GESTIONÁ CON CLUB GRIDO
+# ═══════════════════════════════════════════════
+with tab5:
+    st.markdown("#### Gestioná con Club Grido")
+    st.caption("Herramientas de gestión para tu comunidad de socios.")
+
+    col_l, col_c, col_r = st.columns([1, 3, 1])
+    with col_c:
+        st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
