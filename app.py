@@ -87,20 +87,26 @@ DESCRIPCIONES_OCASION = {
 def check_login():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
+        st.session_state.user_franquicia = None
+        st.session_state.username = None
 
     if not st.session_state.authenticated:
         col_l, col_c, col_r = st.columns([1, 1, 1])
         with col_c:
             st.image("assets/portada.png", width=250)
         st.markdown("<h2 style='text-align:center; margin-top:16px;'>Club Grido Intelligence</h2>", unsafe_allow_html=True)
- 
+
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             user = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
+            st.write("DEBUG users:", list(st.secrets.get("USERS", {}).keys()))
             if st.button("Ingresar", use_container_width=True):
-                if user == st.secrets["LOGIN_USER"] and password == st.secrets["LOGIN_PASS"]:
+                users = st.secrets.get("USERS", {})
+                if user in users and password == users[user]["password"]:
                     st.session_state.authenticated = True
+                    st.session_state.username = user
+                    st.session_state.user_franquicia = users[user]["franquicia"]
                     st.rerun()
                 else:
                     st.error("Usuario o contraseña incorrectos")
@@ -244,8 +250,8 @@ franquicias = load_franquicias()
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st .image("assets/portada.png", use_container_width=True)
-    st .markdown("""
+    st.image("assets/portada.png", use_container_width=True)
+    st.markdown("""
     <div style="text-align:center; padding: 4px 0 16px 0;">
         <div style="font-size:14px; font-weight:700; color:#fff;">
             Club Grido <span style="color:#ec7e04;">Intelligence</span>
@@ -258,42 +264,54 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    # Filters for branch selection
-    provincias = ["Todas"] + sorted(franquicias["provincia"].dropna().unique().tolist())
-    selected_provincia = st.selectbox("🏛 Provincia", options=provincias, key="filter_prov")
 
-    filtered_franq = franquicias.copy()
-    if selected_provincia != "Todas":
-        filtered_franq = filtered_franq[filtered_franq["provincia"] == selected_provincia]
+    if st.session_state.user_franquicia != "todas":
+        # Usuario franquiciado: solo ve su local
+        filtered_franq = franquicias[franquicias["numero"] == st.session_state.user_franquicia]
+        if len(filtered_franq) > 0:
+            selected_bid = filtered_franq.iloc[0]["branchofficeid"]
+            st.markdown(
+                f"📍 **{filtered_franq.iloc[0]['numero']}-{filtered_franq.iloc[0]['heladeria']}**"
+            )
+            st.caption(f"{filtered_franq.iloc[0]['localidad']} · {filtered_franq.iloc[0]['provincia']}")
+        else:
+            st.error("Franquicia no encontrada")
+            st.stop()
+    else:
+        # Admin: ve todas las franquicias con filtros
+        provincias = ["Todas"] + sorted(franquicias["provincia"].dropna().unique().tolist())
+        selected_provincia = st.selectbox("🏛 Provincia", options=provincias, key="filter_prov")
 
-    localidades = ["Todas"] + sorted(filtered_franq["localidad"].dropna().unique().tolist())
-    selected_localidad = st.selectbox("📌 Localidad", options=localidades, key="filter_loc")
+        filtered_franq = franquicias.copy()
+        if selected_provincia != "Todas":
+            filtered_franq = filtered_franq[filtered_franq["provincia"] == selected_provincia]
 
-    if selected_localidad != "Todas":
-        filtered_franq = filtered_franq[filtered_franq["localidad"] == selected_localidad]
+        localidades = ["Todas"] + sorted(filtered_franq["localidad"].dropna().unique().tolist())
+        selected_localidad = st.selectbox("📌 Localidad", options=localidades, key="filter_loc")
 
-    FRANQUICIAS_DESTACADAS = ["3183","3008", "4444", "4552", "4489", "4544", "3875", "3807", 
-                              "4248", "4201", "5462", "3835", "4340", "3212", "3006"]
+        if selected_localidad != "Todas":
+            filtered_franq = filtered_franq[filtered_franq["localidad"] == selected_localidad]
 
-    # Filtrar solo las franquicias destacadas si existen en el filtro actual
-    destacadas = filtered_franq[filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
-    otras = filtered_franq[~filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
+        FRANQUICIAS_DESTACADAS = ["3183","3008", "4444", "4552", "4489", "4544", "3875", "3807",
+                                  "4248", "4201", "5462", "3835", "4340", "3212", "3006"]
 
-    # Primero las destacadas, luego el resto
-    franq_ordenadas = pd.concat([destacadas, otras])
+        destacadas = filtered_franq[filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
+        otras = filtered_franq[~filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
+        franq_ordenadas = pd.concat([destacadas, otras])
 
-    branch_options = {
-        row.branchofficeid: f"{row.numero}-{row.heladeria} — {row.localidad}"
-        for _, row in franq_ordenadas.iterrows()
-    }
+        branch_options = {
+            row.branchofficeid: f"{row.numero}-{row.heladeria} — {row.localidad}"
+            for _, row in franq_ordenadas.iterrows()
+        }
 
-    selected_bid = st.selectbox(
-        "📍 Franquicia",
-        options=list(branch_options.keys()),
-        format_func=lambda x: branch_options[x],
-    )
+        selected_bid = st.selectbox(
+            "📍 Franquicia",
+            options=list(branch_options.keys()),
+            format_func=lambda x: branch_options[x],
+        )
 
     st.markdown("---")
+    st.caption(f"👤 {st.session_state.username}")
     st.markdown(
         "<div style='font-size:10px; color:rgba(255,255,255,0.25); text-align:center; padding:8px;'>"
         "Club Grido Intelligence v1.0"
@@ -325,10 +343,6 @@ st.markdown(f"""
 # FILTER DATA FOR SELECTED BRANCH
 # ─────────────────────────────────────────────
 b_data = load_branch(selected_bid)
-if len(b_data) > 0 and "email" in b_data.columns:
-    b_data["email"] = [f"email-ejemplo-{np.random.randint(10000, 99999)}@gmail.com" for _ in range(len(b_data))]
-if len(b_data) > 0 and "PhoneNumber1" in b_data.columns:
-    b_data["PhoneNumber1"] = [f"54-{np.random.randint(100, 999)}-{np.random.randint(1000000, 9999999)}" for _ in range(len(b_data))]
 
 # Reemplazar nulos con N/A
 b_data = b_data.fillna("N/A")
