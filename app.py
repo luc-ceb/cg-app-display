@@ -9,8 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pydeck as pdk
 import base64
-#from groq import Groq
-from anthropic import Anthropic
+from groq import Groq
 
 import os
 
@@ -1238,17 +1237,17 @@ with tab4:
  
                 with st.spinner("🧠 Generando recomendación..."):
                     try:
-                        client = Anthropic(api_key = st.secrets.get("ANTHROPIC_API_KEY", ""))
-                        response = client.messages.create(
-                                model="claude-sonnet-4-6",
-                                system=prompt_sistema,
+                        client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
+                        response = client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
                                 messages=[
-                                    {"role":"user" , "content":resumen_datos},
+                                    {"role": "system", "content": prompt_sistema},
+                                    {"role": "user", "content": resumen_datos},
                                 ],
-                                temperature = 0.7 ,
+                                temperature=0.7,
                                 max_tokens=800,
                         )
-                        respuesta = response.content[0].text
+                        respuesta = response.choices[0].message.content
 
                         # Mostrar respuesta del LLM
                         st.markdown(
