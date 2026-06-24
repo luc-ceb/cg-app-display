@@ -9,11 +9,72 @@ import numpy as np
 import plotly.graph_objects as go
 import pydeck as pdk
 import base64
+import sqlite3
+from pathlib import Path
+from datetime import datetime
 from groq import Groq
 
 import os
 
 os.environ["MAPBOX_TOKEN"] = st.secrets.get("MAPBOX_API_KEY", "")
+
+EVENT_DB_PATH = Path("data") / "events.db"
+
+@st.cache_resource
+def get_db_connection():
+    EVENT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(EVENT_DB_PATH, check_same_thread=False)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            franquicia_id TEXT,
+            usuario_id TEXT,
+            evento TEXT,
+            timestamp TEXT,
+            objetivo TEXT,
+            productos TEXT,
+            detalle TEXT
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def log_event(evento, franquicia_id, usuario_id, objetivo="", productos="", detalle=""):
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO events (franquicia_id, usuario_id, evento, timestamp, objetivo, productos, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            franquicia_id,
+            usuario_id,
+            evento,
+            datetime.utcnow().isoformat(),
+            objetivo,
+            productos,
+            detalle,
+        ),
+    )
+    conn.commit()
+
+
+def register_download_event(franquicia_id, usuario_id, objetivo, detalle):
+    log_event(
+        "accion_ejecutada",
+        franquicia_id,
+        usuario_id,
+        objetivo=objetivo,
+        detalle=detalle,
+    )
+
+
+def load_event_metrics():
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM events ORDER BY timestamp DESC", conn)
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+    return df
 
 # ─────────────────────────────────────────────
 # CONFIG & CONSTANTS
@@ -103,9 +164,16 @@ def check_login():
             if st.button("Ingresar", use_container_width=True):
                 users = st.secrets.get("USERS", {})
                 if user in users and password == users[user]["password"]:
+                    franquicia = users[user]["franquicia"]
                     st.session_state.authenticated = True
                     st.session_state.username = user
-                    st.session_state.user_franquicia = users[user]["franquicia"]
+                    st.session_state.user_franquicia = franquicia
+                    log_event(
+                        "login",
+                        franquicia,
+                        user,
+                        detalle="login_success",
+                    )
                     st.rerun()
                 else:
                     st.error("Usuario o contraseña incorrectos")
@@ -425,13 +493,92 @@ def mostrar_leyenda_ocasiones(df_datos, titulo="¿En qué ocasión consumen? - D
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
-tab1, tab2, tab3 ,tab4 , tab5 = st.tabs([
+tab_names = [
     "📍 Mi Comunidad",
     "💓 Estado de Socios",
     "🍦 Ocasión de Consumo",
     "🤖 Asistente Comercial",
     "🎯 Gestioná con Club Grido",
-])
+]
+if st.session_state.user_franquicia == "todas":
+    tab_names.append("📊 Métricas")
+tabs = st.tabs(tab_names)
+
+tab1, tab2, tab3, tab4, tab5 = tabs[:5]
+tab_metrics = tabs[5] if len(tabs) == 6 else None
+
+if tab_metrics is not None:
+    with tab_metrics:
+        st.markdown("#### Métricas del piloto")
+        st.markdown(
+            "Registro de eventos por franquicia y usuario. Aquí se resumen los accesos semanales, el uso del asistente y las acciones ejecutadas."
+        )
+
+        events = load_event_metrics()
+        events = events[events["franquicia_id"].astype(str) != "todas"]
+        total_franquicias = int(franquicias["numero"].astype(str).nunique())
+
+        if events.empty:
+            st.info("Aún no hay eventos registrados.")
+        else:
+            last_week = datetime.utcnow() - pd.Timedelta(days=7)
+            weekly_logins = (
+                events[
+                    (events["evento"] == "login") &
+                    (events["timestamp"] >= last_week)
+                ]["franquicia_id"]
+                .nunique()
+            )
+            adoption_pct = round(weekly_logins / total_franquicias * 100, 1) if total_franquicias else 0
+
+            assistant_counts = (
+                events[events["evento"] == "assistant_use"]
+                .groupby("franquicia_id")
+                .size()
+            )
+            assistant_ok = int((assistant_counts >= 3).sum())
+            assistant_pct = round(assistant_ok / total_franquicias * 100, 1) if total_franquicias else 0
+
+            accion_ok = int(
+                events[events["evento"] == "accion_ejecutada"]["franquicia_id"].nunique()
+            )
+            accion_pct = round(accion_ok / total_franquicias * 100, 1) if total_franquicias else 0
+
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            c1.metric("Franquicias totales", f"{total_franquicias}")
+            c2.metric("Adopción semanal", f"{adoption_pct}%", f"{weekly_logins} con login")
+            c3.metric("3+ uso asistente", f"{assistant_pct}%", f"{assistant_ok} franquicias")
+            c4.metric("Accionabilidad", f"{accion_pct}%", f"{accion_ok} franquicias")
+
+            st.markdown("##### Detalle por franquicia")
+            franchise_metrics = (
+                events.groupby("franquicia_id")["evento"]
+                .value_counts()
+                .unstack(fill_value=0)
+                .reset_index()
+            )
+            if "assistant_use" not in franchise_metrics.columns:
+                franchise_metrics["assistant_use"] = 0
+            if "accion_ejecutada" not in franchise_metrics.columns:
+                franchise_metrics["accion_ejecutada"] = 0
+            if "login" not in franchise_metrics.columns:
+                franchise_metrics["login"] = 0
+
+            franchise_metrics["adopcion_semanal"] = franchise_metrics["login"] > 0
+            franchise_metrics["uso_asistente_3+"] = franchise_metrics["assistant_use"] >= 3
+            franchise_metrics["accion_ejecutada_1+"] = franchise_metrics["accion_ejecutada"] >= 1
+
+            st.dataframe(
+                franchise_metrics.sort_values(
+                    by=["uso_asistente_3+", "accion_ejecutada_1+", "login"],
+                    ascending=False,
+                ),
+                use_container_width=True,
+                height=360,
+            )
+
+            st.markdown("##### Eventos recientes")
+            st.dataframe(events.head(200), use_container_width=True, height=320)
 
 
 # ═══════════════════════════════════════════════
@@ -1158,6 +1305,15 @@ with tab4:
         )
  
         if generar and len(candidatos) > 0:
+                franquicia_event_id = branch_info.get("numero", st.session_state.user_franquicia)
+                log_event(
+                    "assistant_use",
+                    franquicia_event_id,
+                    st.session_state.username,
+                    objetivo=objetivo_sel,
+                    productos=", ".join(productos_sel),
+                    detalle=f"candidatos={len(candidatos)}",
+                )
                 # Construir resumen para el LLM
                 resumen_datos = f"""
                 Franquicia: {branch_info.get('numero', '')}-{branch_info.get('heladeria', '')}
@@ -1301,12 +1457,20 @@ with tab4:
  
                 # Botón para descargar lista
                 csv = tabla_candidatos.to_csv(index=False).encode("utf-8")
+                download_detail = f"descarga_csv_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}"
                 st.download_button(
                     "📥 Descargar lista de socios (CSV)",
                     data=csv,
                     file_name=f"socios_promo_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.csv",
                     mime="text/csv",
                     use_container_width=True,
+                    on_click=register_download_event,
+                    args=(
+                        branch_info.get("numero", st.session_state.user_franquicia),
+                        st.session_state.username,
+                        objetivo_sel,
+                        download_detail,
+                    ),
                 )
  
         elif not generar:
