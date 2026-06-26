@@ -12,7 +12,6 @@ import base64
 import sqlite3
 from pathlib import Path
 from datetime import datetime
-from groq import Groq
 
 import os
 
@@ -1358,7 +1357,7 @@ with tab4:
                 * "Aumentar ticket promedio": sugerí combos o upgrades de formato, mencioná el kg promedio actual.
                 * "Liquidar stock": enfocate en precio agresivo y escasez, promos flash de 48-72hs.
                 - Mencioná los productos favoritos de los candidatos para personalizar la promo.
-                - Si muchos candidatos tienen app ({candidatos['Tiene App'].sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal de venta por app pero no menciones la posibilidad de enviar push por app.
+                - Si muchos candidatos tienen app ({(candidatos['Tiene App']=='Si').sum() if 'Tiene App' in candidatos.columns else 0} de {len(candidatos)}), priorizá canal de venta por app pero no menciones la posibilidad de enviar push por app.
                 - Respondé en español argentino, de forma directa y práctica.
 
                 REGLAS DE NEGOCIO PARA PROMOCIONES:
@@ -1391,34 +1390,24 @@ with tab4:
                 - Resultado esperado (estimá en kg o socios reactivados usando los datos, aclara que es un aproximado)
                 """
  
-                with st.spinner("🧠 Generando recomendación..."):
-                    try:
-                        client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
-                        response = client.chat.completions.create(
-                                model="llama-3.3-70b-versatile",
-                                messages=[
-                                    {"role": "system", "content": prompt_sistema},
-                                    {"role": "user", "content": resumen_datos},
-                                ],
-                                temperature=0.7,
-                                max_tokens=800,
-                        )
-                        respuesta = response.choices[0].message.content
+                prompt_completo = prompt_sistema + "\n\n--- DATOS ---\n\n" + resumen_datos
 
-                        # Mostrar respuesta del LLM
-                        st.markdown(
-                            f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
-                            f"border-radius:12px; padding:20px; margin-bottom:16px;'>"
-                            f"<div style='font-size:11px; color:{NARANJA}; text-transform:uppercase; "
-                            f"letter-spacing:0.1em; margin-bottom:12px;'>Recomendación generada por IA</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
-                        st.markdown(respuesta)
- 
-                    except Exception as e:
-                        st.error(f"Error al conectar con el servidor proveedor de la inferencia LLM: {str(e)}")
-                        st.info("Verificá que la API key esté configurada")
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
+                    f"border-radius:12px; padding:20px; margin-bottom:16px;'>"
+                    f"<div style='font-size:11px; color:{NARANJA}; text-transform:uppercase; "
+                    f"letter-spacing:0.1em; margin-bottom:12px;'>Prompt generado — Copialo y pegalo en tu chat de IA</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                st.code(prompt_completo, language=None)
+                st.download_button(
+                    "📋 Descargar prompt como texto",
+                    data=prompt_completo,
+                    file_name=f"prompt_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                ) 
                         
  
                 # Tabla de socios candidatos (siempre se muestra, independiente del LLM)
