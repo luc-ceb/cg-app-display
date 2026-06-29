@@ -470,12 +470,31 @@ pct_penetracion = round(penetracion * 100) if penetracion is not None and not pd
 pct_churn = round(
     (b_data["estado"].isin(["En riesgo", "Abandonado"])).mean() * 100, 1
 ) if n_total > 0 else 0
+clientes_totales = branch_info .get("Total clientes", 0)
+
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Socios Activos", f"{int(socios_activos):,}", help="Socios activos en el último año")
 k2.metric("Kg Vendidos Club", f"{kg_club:,.0f} kg",help="Kilogramos vendidos por Club Grido en el último año")
 k3.metric("Penetración Club", f"{pct_penetracion}%",help="Porcentaje de kilos vendidos a través del Club sobre el total de ventas mostrador")
 k4.metric("Socios en riesgo", f"{pct_churn}%", delta_color="inverse", help="Porcentaje de socios en estado en riesgo o abandonado")
+# Barra de penetración sobre población de la zona
+poblacion_zona = 30000
+pct_cobertura = int(clientes_totales) / poblacion_zona * 100 if poblacion_zona > 0 else 0
+st.markdown(
+    f"""
+    <div style="margin:12px 0 8px 0;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:4px;">
+            <span>Clientes activos estimados en la zona · Extrapolación basada en socios del Club</span>
+            <span><b style="color:#ec7e04;">{int(clientes_totales):,}</b> / {poblacion_zona:,} habitantes · <b>{pct_cobertura:.1f}%</b></span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06); border-radius:6px; height:14px; overflow:hidden;">
+            <div style="background:linear-gradient(90deg, #ec7e04, #f5a623); width:{min(pct_cobertura, 100):.1f}%; height:100%; border-radius:6px; transition:width 0.5s;"></div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -998,6 +1017,20 @@ with tab1:
     st .divider()
     mostrar_leyenda_ocasiones(b_data)
 
+    st.divider()
+    st.markdown("##### 📋 Base completa de socios")
+    st.caption(f"{n_total} socios en este punto de venta")
+    d_download = b_data[['Nombre','email','PhoneNumber1','edad','Dias desde ultima compra','Kilos','Cantidad de compras','ProductoFavorito','LineaProdFav','DiasDesdeUltimaCompra','estado','Tiene App','Dias desde ultimo ingreso app']]
+    d_download = d_download.rename(columns={'PhoneNumber1':'Num tel','edad':'Edad','Kilos':'Kilos ult año','ProductoFavorito':'Prod Fav','LineaProdFav':'Linea Prod Fav','DiasDesdeUltimaCompra':'Dias desde ult comp','estado':'Estado'})
+    csv_completo = d_download .to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "📥 Descargar base completa (CSV)",
+        data=csv_completo,
+        file_name=f"socios_completo_{branch_info.get('numero', '')}.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
 
 # ═══════════════════════════════════════════════
 # TAB 2 — ESTADO DE SOCIOS (SUPERVIVENCIA)
@@ -1287,11 +1320,12 @@ OBJETIVOS = [
 ]
  
 with tab4:
-    st.markdown("#### 🤖 Asistente Comercial Inteligente - Versión de prueba -")
+    st.markdown("#### 🤖 Asistente Comercial — Generador de Prompts")
     st.markdown(
         "<div style='font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:20px;'>"
         "Seleccioná los productos que querés fomentar y el objetivo comercial. "
-        "El asistente utilizará inteligencia artificial para identificar los socios más propensos y generar una promoción sugerida."
+        "El asistente identificará los socios más propensos y generará un <b>prompt listo para copiar</b> "
+        "y pegar en tu chat de IA preferido (ChatGPT, Claude, Gemini, etc.) para obtener una promoción personalizada."
         "</div>",
         unsafe_allow_html=True,
     )
