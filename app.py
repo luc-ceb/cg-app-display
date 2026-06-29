@@ -12,11 +12,13 @@ import base64
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import os
 
 os.environ["MAPBOX_TOKEN"] = st.secrets.get("MAPBOX_API_KEY", "")
 
+AR_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
 EVENT_DB_PATH = Path("data") / "events.db"
 
 @st.cache_resource
@@ -49,7 +51,7 @@ def log_event(evento, franquicia_id, usuario_id, objetivo="", productos="", deta
             franquicia_id,
             usuario_id,
             evento,
-            datetime.utcnow().isoformat(),
+            datetime.now(AR_TZ).isoformat(),
             objetivo,
             productos,
             detalle,
@@ -68,12 +70,56 @@ def register_download_event(franquicia_id, usuario_id, objetivo, detalle):
     )
 
 
+def filter_events(events, period_mode, period_value, week_map, day_map):
+    if period_mode == "Todas" or period_value == "Todas":
+        return events
+    if period_mode == "Semana" and period_value in week_map:
+        start, end = week_map[period_value]
+        mask = (events["timestamp"].dt.date >= start) & (events["timestamp"].dt.date <= end)
+        return events[mask]
+    if period_mode == "Día" and period_value in day_map:
+        selected_date = day_map[period_value]
+        return events[events["timestamp"].dt.date == selected_date]
+    return events
+
+
 def load_event_metrics():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM events ORDER BY timestamp DESC", conn)
     if not df.empty:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            format="ISO8601",
+            utc=True,
+            errors="coerce"
+        ).dt.tz_convert(AR_TZ)
     return df
+
+
+def build_period_filters(events):
+    if events.empty:
+        return ["Todas"], [], {}
+
+    events = events.copy()
+    events["date"] = events["timestamp"].dt.date
+    min_date = events["date"].min()
+    max_date = events["date"].max()
+
+    # Weeks Monday-Sunday
+    week_starts = pd.date_range(start=min_date - pd.Timedelta(days=min_date.weekday()), end=max_date, freq="7D")
+    week_options = []
+    week_map = {}
+    for idx, start in enumerate(week_starts, start=1):
+        end = start + pd.Timedelta(days=6)
+        label = f"Semana {idx} ({start.strftime('%d/%m/%y')} al {end.strftime('%d/%m/%y')})"
+        week_options.append(label)
+        week_map[label] = (start.date(), end.date())
+
+    day_range = pd.date_range(min_date, max_date, freq="D")
+    day_options = [d.strftime("%d/%m/%y") for d in day_range]
+    day_map = {d.strftime("%d/%m/%y"): d.date() for d in day_range}
+
+    return ["Todas"], week_options, day_map, week_map
 
 # ─────────────────────────────────────────────
 # CONFIG & CONSTANTS
@@ -520,18 +566,42 @@ if tab_metrics is not None:
         if events.empty:
             st.info("Aún no hay eventos registrados.")
         else:
-            last_week = datetime.utcnow() - pd.Timedelta(days=7)
+            _, week_options, day_map, week_map = build_period_filters(events)
+            period_mode = st.selectbox(
+                "Filtrar por periodo",
+                ["Todas", "Semana", "Día"],
+                key="metrics_period_mode",
+                index=0,
+            )
+            if period_mode == "Semana":
+                period_value = st.selectbox(
+                    "Seleccionar semana",
+                    ["Todas"] + week_options,
+                    key="metrics_week_filter",
+                )
+            elif period_mode == "Día":
+                period_value = st.selectbox(
+                    "Seleccionar día",
+                    ["Todas"] + list(day_map.keys()),
+                    key="metrics_day_filter",
+                )
+            else:
+                period_value = "Todas"
+
+            filtered_events = filter_events(events, period_mode, period_value, week_map, day_map)
+
+            last_week = datetime.now(AR_TZ) - pd.Timedelta(days=7)
             weekly_logins = (
-                events[
-                    (events["evento"] == "login") &
-                    (events["timestamp"] >= last_week)
+                filtered_events[
+                    (filtered_events["evento"] == "login") &
+                    (filtered_events["timestamp"] >= last_week)
                 ]["franquicia_id"]
                 .nunique()
             )
             adoption_pct = round(weekly_logins / total_franquicias * 100, 1) if total_franquicias else 0
 
             assistant_counts = (
-                events[events["evento"] == "assistant_use"]
+                filtered_events[filtered_events["evento"] == "assistant_use"]
                 .groupby("franquicia_id")
                 .size()
             )
@@ -539,19 +609,19 @@ if tab_metrics is not None:
             assistant_pct = round(assistant_ok / total_franquicias * 100, 1) if total_franquicias else 0
 
             accion_ok = int(
-                events[events["evento"] == "accion_ejecutada"]["franquicia_id"].nunique()
+                filtered_events[filtered_events["evento"] == "accion_ejecutada"]["franquicia_id"].nunique()
             )
             accion_pct = round(accion_ok / total_franquicias * 100, 1) if total_franquicias else 0
 
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
             c1.metric("Franquicias totales", f"{total_franquicias}")
             c2.metric("Adopción semanal", f"{adoption_pct}%", f"{weekly_logins} con login")
-            c3.metric("3+ uso asistente", f"{assistant_pct}%", f"{assistant_ok} franquicias")
-            c4.metric("Accionabilidad", f"{accion_pct}%", f"{accion_ok} franquicias")
+            c3.metric("Franquicias con acción comercial", f"{accion_ok}", f"{accion_pct}%")
+            c4.metric("3+ uso asistente", f"{assistant_pct}%", f"{assistant_ok} franquicias")
 
             st.markdown("##### Detalle por franquicia")
             franchise_metrics = (
-                events.groupby("franquicia_id")["evento"]
+                filtered_events.groupby("franquicia_id")["evento"]
                 .value_counts()
                 .unstack(fill_value=0)
                 .reset_index()
@@ -577,7 +647,7 @@ if tab_metrics is not None:
             )
 
             st.markdown("##### Eventos recientes")
-            st.dataframe(events.head(200), use_container_width=True, height=320)
+            st.dataframe(filtered_events.head(200), use_container_width=True, height=320)
 
 
 # ═══════════════════════════════════════════════
@@ -1407,6 +1477,13 @@ with tab4:
                     file_name=f"prompt_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.txt",
                     mime="text/plain",
                     use_container_width=True,
+                    on_click=register_download_event,
+                    args=(
+                        branch_info.get("numero", st.session_state.user_franquicia),
+                        st.session_state.username,
+                        objetivo_sel,
+                        f"descarga_prompt_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}",
+                    ),
                 ) 
                         
  
