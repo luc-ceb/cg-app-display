@@ -356,6 +356,7 @@ def load_branch(bid):
         return pd.read_parquet(path)
     return pd.DataFrame()
 
+st.cache_data.clear()
 franquicias = load_franquicias()
 
 # ─────────────────────────────────────────────
@@ -497,7 +498,6 @@ st.markdown(
 )
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
 
 def mostrar_leyenda_ocasiones(df_datos, titulo="##### ¿En qué ocasión consumen?"):
     st.markdown(titulo)
@@ -1014,8 +1014,40 @@ with tab1:
         else:
             st.warning("No hay clientes con coordenadas válidas para este punto de venta.")
         
-    st .divider()
-    mostrar_leyenda_ocasiones(b_data)
+    st.divider()
+
+    st.markdown("##### 📱 Socios con App instalada")
+    socios_app = b_data[b_data["Tiene App"].astype(str).str.lower().isin(["true", "1", "si", "sí"])].copy()
+
+    if len(socios_app) == 0:
+        st.info("No hay socios con App en este punto de venta.")
+    else:
+        st.caption(f"{len(socios_app)} socios con App de {n_total} totales ({len(socios_app)/n_total*100:.0f}%)")
+
+        tabla_app = socios_app[["Nombre", "Kilos", "Cantidad de compras", "Dias desde ultima compra",
+                                 "Dias desde ultimo ingreso app",
+                                "estado", "PhoneNumber1", "email"]].copy()
+        tabla_app["Kilos"] = tabla_app["Kilos"].round(1)
+        tabla_app.rename(columns={
+            "Kilos": "Kg/año",
+            "Cantidad de compras": "Compras/año",
+            "Dias desde ultima compra": "Días s/compra",
+            "Dias desde ultimo ingreso app": "Días s/app",
+            "PhoneNumber1": "Teléfono",
+            "email": "Email",
+            "estado": "Estado",
+        }, inplace=True)
+
+        st.dataframe(tabla_app, hide_index=True, use_container_width=True, height=350)
+
+        csv_app = tabla_app.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📥 Descargar socios con App (CSV)",
+            data=csv_app,
+            file_name=f"socios_app_{branch_info.get('numero', '')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
     st.divider()
     st.markdown("##### 📋 Base completa de socios")
