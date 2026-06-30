@@ -205,7 +205,6 @@ def check_login():
         with col2:
             user = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
-            st.write("DEBUG users:", list(st.secrets.get("USERS", {}).keys()))
             if st.button("Ingresar", use_container_width=True):
                 users = st.secrets.get("USERS", {})
                 if user in users and password == users[user]["password"]:
@@ -355,6 +354,10 @@ def load_branch(bid):
     if os.path.exists(path):
         return pd.read_parquet(path)
     return pd.DataFrame()
+
+@st.cache_data
+def load_ventas():
+    return pd.read_parquet("data/ventas-general.parquet")
 
 st.cache_data.clear()
 franquicias = load_franquicias()
@@ -563,13 +566,15 @@ tab_names = [
     "🍦 Ocasión de Consumo",
     "🤖 Asistente Comercial",
     "🎯 Gestioná con Club Grido",
+    "📈 Evolución de Ventas",
+
 ]
 if st.session_state.user_franquicia == "todas":
     tab_names.append("📊 Métricas")
 tabs = st.tabs(tab_names)
 
-tab1, tab2, tab3, tab4, tab5 = tabs[:5]
-tab_metrics = tabs[5] if len(tabs) == 6 else None
+tab1, tab2, tab3, tab4, tab5 , tab6 = tabs[:6]
+tab_metrics = tabs[6] if len(tabs) == 7 else None
 
 if tab_metrics is not None:
     with tab_metrics:
@@ -1625,3 +1630,356 @@ with tab5:
     col_l, col_c, col_r = st.columns([1, 3, 1])
     with col_c:
         st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
+
+
+# ═══════════════════════════════════════════════
+# TAB 6 — EVOLUCIÓN DE VENTAS
+# ═══════════════════════════════════════════════
+with tab6:
+    st.markdown("#### 📈 Evolución de Ventas por Producto")
+    st.caption("Visualizá la evolución de kilos vendidos en tu franquicia, filtrando por rango de fechas y productos.")
+
+    df_ventas = load_ventas()
+
+    # Filtrar por la franquicia seleccionada
+    ventas_franq = df_ventas[df_ventas["franchise"] == branch_info.get("numero", "")].copy()
+
+    if len(ventas_franq) == 0:
+        st.info("No hay datos de ventas para esta franquicia.")
+    else:
+        ventas_franq["fecha"] = pd.to_datetime(ventas_franq["fecha"])
+
+        # ── Filtros ──
+        col_fecha, col_prod = st.columns([1, 1])
+
+        with col_fecha:
+            fecha_min = ventas_franq["fecha"].min().date()
+            fecha_max = ventas_franq["fecha"].max().date()
+            rango_fechas = st.date_input(
+                "📅 Rango de fechas",
+                value=(fecha_min, fecha_max),
+                min_value=fecha_min,
+                max_value=fecha_max,
+                key="ventas_fecha_range",
+            )
+
+        with col_prod:
+            productos_disponibles = sorted(ventas_franq["Producto"].dropna().unique().tolist())
+            productos_sel = st.multiselect(
+                "📦 Productos",
+                options=productos_disponibles,
+                default=productos_disponibles[:5] if len(productos_disponibles) > 5 else productos_disponibles,
+                key="ventas_productos",
+            )
+
+        # Aplicar filtros
+        if len(rango_fechas) == 2 and len(productos_sel) > 0:
+            fecha_inicio, fecha_fin = rango_fechas
+            ventas_filtradas = ventas_franq[
+                (ventas_franq["fecha"].dt.date >= fecha_inicio)
+                & (ventas_franq["fecha"].dt.date <= fecha_fin)
+                & (ventas_franq["Producto"].isin(productos_sel))
+            ]
+
+            if len(ventas_filtradas) == 0:
+                st.warning("No hay datos para los filtros seleccionados.")
+            else:
+                # ── KPIs de ventas ──
+                k_v1, k_v2, k_v3 = st.columns(3)
+                kg_total_periodo = ventas_filtradas["kilos_totales"].sum()
+                kg_promo_periodo = ventas_filtradas["kilos_promocion"].sum()
+                pct_promo = (kg_promo_periodo / kg_total_periodo * 100) if kg_total_periodo > 0 else 0
+
+                k_v1.metric("Kg totales en el período", f"{kg_total_periodo:,.0f} kg")
+                k_v2.metric("Kg en promoción", f"{kg_promo_periodo:,.0f} kg")
+                k_v3.metric("% Kilos en promo", f"{pct_promo:.1f}%")
+
+                st.markdown("---")
+
+                # ── Gráfico evolutivo ──
+                # Agrupar por fecha y producto
+                evol = (
+                    ventas_filtradas.groupby(["fecha", "Producto"])["kilos_totales"]
+                    .sum()
+                    .reset_index()
+                )
+
+                fig_evol = go.Figure()
+                for prod in productos_sel:
+                    prod_data = evol[evol["Producto"] == prod].sort_values("fecha")
+                    if len(prod_data) > 0:
+                        fig_evol.add_trace(go.Scatter(
+                            x=prod_data["fecha"],
+                            y=prod_data["kilos_totales"],
+                            mode="lines+markers",
+                            name=prod,
+                            line=dict(width=2),
+                            marker=dict(size=5),
+                        ))
+
+                fig_evol.update_layout(
+                    **PLOTLY_LAYOUT,
+                    height=450,
+                    xaxis_title="Fecha",
+                    yaxis_title="Kilos vendidos",
+                    title=dict(text="Evolución de Kilos Vendidos por Producto", font=dict(size=14)),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom", y=1.02,
+                        xanchor="center", x=0.5,
+                        font=dict(size=10),
+                    ),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(fig_evol, use_container_width=True)
+
+                # ── Gráfico de kg en promoción vs total ──
+                st.markdown("##### Kilos totales vs. Kilos en promoción")
+                evol_total = (
+                    ventas_filtradas.groupby("fecha")
+                    .agg(kg_total=("kilos_totales", "sum"), kg_promo=("kilos_promocion", "sum"))
+                    .reset_index()
+                    .sort_values("fecha")
+                )
+
+                fig_promo = go.Figure()
+                fig_promo.add_trace(go.Bar(
+                    x=evol_total["fecha"],
+                    y=evol_total["kg_total"],
+                    name="Kg totales",
+                    marker_color=NARANJA,
+                    opacity=0.7,
+                ))
+                fig_promo.add_trace(go.Bar(
+                    x=evol_total["fecha"],
+                    y=evol_total["kg_promo"],
+                    name="Kg en promoción",
+                    marker_color=CELESTE,
+                    opacity=0.9,
+                ))
+                fig_promo.update_layout(
+                    **PLOTLY_LAYOUT,
+                    height=350,
+                    barmode="overlay",
+                    xaxis_title="Fecha",
+                    yaxis_title="Kilos",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                )
+                st.plotly_chart(fig_promo, use_container_width=True)
+
+                # ── Tabla resumen por producto ──
+                st.markdown("##### Resumen por producto en el período")
+                resumen = (
+                    ventas_filtradas.groupby("Producto")
+                    .agg(
+                        Kg_Total=("kilos_totales", "sum"),
+                        Kg_Promo=("kilos_promocion", "sum"),
+                        Registros=("kilos_totales", "count"),
+                    )
+                    .sort_values("Kg_Total", ascending=False)
+                    .reset_index()
+                )
+                resumen["% Promo"] = (resumen["Kg_Promo"] / resumen["Kg_Total"] * 100).round(1)
+                resumen["Kg_Total"] = resumen["Kg_Total"].round(1)
+                resumen["Kg_Promo"] = resumen["Kg_Promo"].round(1)
+
+                st.dataframe(
+                    resumen,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Kg_Total": st.column_config.ProgressColumn(
+                            "Kg Total",
+                            min_value=0,
+                            max_value=float(resumen["Kg_Total"].max()),
+                            format="%.0f",
+                        ),
+                    },
+                )
+        else:
+            if len(rango_fechas) < 2:
+                st.info("Seleccioná un rango de fechas completo.")
+            if len(productos_sel) == 0:
+                st.info("Seleccioná al menos un producto.")
+
+# ═══════════════════════════════════════════════
+        # SECCIÓN: RESUMEN ÚLTIMA SEMANA
+        # ═══════════════════════════════════════════════
+        st.divider()
+        st.markdown("#### 📊 Resumen de la Última Semana")
+        st.caption("Comparación de la última semana completa vs. promedio de las 3 semanas anteriores.")
+
+        # Calcular última semana completa
+        fecha_mas_reciente = ventas_franq["fecha"].max()
+        fin_ultima_semana = fecha_mas_reciente
+        inicio_ultima_semana = fin_ultima_semana - pd.Timedelta(days=6)
+        inicio_3_semanas = inicio_ultima_semana - pd.Timedelta(days=21)
+
+        ultima_semana = ventas_franq[
+            (ventas_franq["fecha"] >= inicio_ultima_semana)
+            & (ventas_franq["fecha"] <= fin_ultima_semana)
+        ]
+        tres_semanas_previas = ventas_franq[
+            (ventas_franq["fecha"] >= inicio_3_semanas)
+            & (ventas_franq["fecha"] < inicio_ultima_semana)
+        ]
+
+        st.caption(f"Última semana: {inicio_ultima_semana.strftime('%d/%m/%Y')} al {fin_ultima_semana.strftime('%d/%m/%Y')}")
+        # Filtro de productos para última semana
+        prods_semana_disponibles = sorted(ultima_semana["Producto"].dropna().unique().tolist())
+        prods_semana_sel = st.multiselect(
+            "📦 Filtrar productos (última semana)",
+            options=prods_semana_disponibles,
+            default=prods_semana_disponibles[:5] if len(prods_semana_disponibles) > 5 else prods_semana_disponibles,
+            key="ventas_prods_semana",
+        )
+        ultima_semana = ultima_semana[ultima_semana["Producto"].isin(prods_semana_sel)]
+        tres_semanas_previas = tres_semanas_previas[tres_semanas_previas["Producto"].isin(prods_semana_sel)]
+
+        if len(ultima_semana) == 0:
+            st.info("No hay datos para la última semana.")
+        else:
+            # ── KPIs comparativos ──
+            kg_ult = ultima_semana["kilos_totales"].sum()
+            kg_promo_ult = ultima_semana["kilos_promocion"].sum()
+            pct_promo_ult = (kg_promo_ult / kg_ult * 100) if kg_ult > 0 else 0
+
+            # Promedio semanal de las 3 semanas anteriores
+            if len(tres_semanas_previas) > 0:
+                kg_prom_3s = tres_semanas_previas["kilos_totales"].sum() / 3
+                kg_promo_prom_3s = tres_semanas_previas["kilos_promocion"].sum() / 3
+                pct_promo_prom_3s = (kg_promo_prom_3s / kg_prom_3s * 100) if kg_prom_3s > 0 else 0
+
+                delta_kg = ((kg_ult - kg_prom_3s) / kg_prom_3s * 100) if kg_prom_3s > 0 else 0
+                delta_promo = ((kg_promo_ult - kg_promo_prom_3s) / kg_promo_prom_3s * 100) if kg_promo_prom_3s > 0 else 0
+            else:
+                kg_prom_3s = 0
+                delta_kg = 0
+                delta_promo = 0
+                pct_promo_prom_3s = 0
+
+            kw1, kw2, kw3 = st.columns(3)
+            kw1.metric(
+                "Kg totales (última semana)",
+                f"{kg_ult:,.0f} kg",
+                delta=f"{delta_kg:+.1f}% vs prom. 3 sem.",
+            )
+            kw2.metric(
+                "Kg en promoción",
+                f"{kg_promo_ult:,.0f} kg",
+                delta=f"{delta_promo:+.1f}% vs prom. 3 sem.",
+            )
+            kw3.metric(
+                "% Kilos en promo",
+                f"{pct_promo_ult:.1f}%",
+                delta=f"{pct_promo_ult - pct_promo_prom_3s:+.1f} pp vs prom. 3 sem.",
+            )
+
+            st.markdown("---")
+
+            # ── Gráfico evolutivo: última semana vs promedio 3 semanas ──
+            # Última semana por día y producto
+            evol_ult = (
+                ultima_semana.groupby(["fecha", "Producto"])["kilos_totales"]
+                .sum()
+                .reset_index()
+            )
+
+            # Promedio 3 semanas por día de la semana y producto
+            if len(tres_semanas_previas) > 0:
+                tres_semanas_previas = tres_semanas_previas.copy()
+                tres_semanas_previas["dia_semana"] = tres_semanas_previas["fecha"].dt.dayofweek
+                prom_3s = (
+                    tres_semanas_previas.groupby(["dia_semana", "Producto"])["kilos_totales"]
+                    .mean()
+                    .reset_index()
+                    .rename(columns={"kilos_totales": "kg_promedio_3s"})
+                )
+            else:
+                prom_3s = pd.DataFrame(columns=["dia_semana", "Producto", "kg_promedio_3s"])
+
+            top_prods_semana = prods_semana_sel
+
+            # Gráfico: líneas por producto última semana + líneas punteadas promedio
+            fig_semana = go.Figure()
+            evol_ult_filtrado = evol_ult[evol_ult["Producto"].isin(top_prods_semana)]
+
+            for prod in top_prods_semana:
+                prod_data = evol_ult_filtrado[evol_ult_filtrado["Producto"] == prod].sort_values("fecha")
+                if len(prod_data) > 0:
+                    fig_semana.add_trace(go.Scatter(
+                        x=prod_data["fecha"],
+                        y=prod_data["kilos_totales"],
+                        mode="lines+markers",
+                        name=f"{prod}",
+                        line=dict(width=2),
+                        marker=dict(size=5),
+                    ))
+
+                # Promedio 3 semanas para este producto
+                if len(prom_3s) > 0:
+                    prod_prom = prom_3s[prom_3s["Producto"] == prod].copy()
+                    if len(prod_prom) > 0:
+                        # Mapear día de semana a fechas reales de la última semana
+                        prod_prom = prod_prom.sort_values("dia_semana")
+                        fechas_semana = pd.date_range(inicio_ultima_semana, fin_ultima_semana, freq="D")
+                        prod_prom_mapped = prod_prom.copy()
+                        prod_prom_mapped["fecha"] = [
+                            fechas_semana[d] for d in prod_prom_mapped["dia_semana"]
+                            if d < len(fechas_semana)
+                        ][:len(prod_prom_mapped)]
+                        if len(prod_prom_mapped) > 0:
+                            fig_semana.add_trace(go.Scatter(
+                                x=prod_prom_mapped["fecha"],
+                                y=prod_prom_mapped["kg_promedio_3s"],
+                                mode="lines",
+                                name=f"{prod} (prom 3 sem)",
+                                line=dict(width=1, dash="dash"),
+                                opacity=0.5,
+                                showlegend=False,
+                            ))
+
+            fig_semana.update_layout(
+                **PLOTLY_LAYOUT,
+                height=450,
+                xaxis_title="Fecha",
+                yaxis_title="Kilos vendidos",
+                title=dict(text="Última semana vs. Promedio 3 semanas anteriores", font=dict(size=14)),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom", y=1.02,
+                    xanchor="center", x=0.5,
+                    font=dict(size=9),
+                ),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_semana, use_container_width=True)
+
+            # ── Tabla resumen última semana ──
+            st.markdown("##### Resumen por producto (última semana)")
+            resumen_sem = (
+                ultima_semana.groupby("Producto")
+                .agg(
+                    Kg_Total=("kilos_totales", "sum"),
+                    Kg_Promo=("kilos_promocion", "sum"),
+                )
+                .sort_values("Kg_Total", ascending=False)
+                .reset_index()
+            )
+            resumen_sem["% Promo"] = (resumen_sem["Kg_Promo"] / resumen_sem["Kg_Total"] * 100).round(1)
+            resumen_sem["Kg_Total"] = resumen_sem["Kg_Total"].round(1)
+            resumen_sem["Kg_Promo"] = resumen_sem["Kg_Promo"].round(1)
+
+            st.dataframe(
+                resumen_sem,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Kg_Total": st.column_config.ProgressColumn(
+                        "Kg Total",
+                        min_value=0,
+                        max_value=float(resumen_sem["Kg_Total"].max()),
+                        format="%.0f",
+                    ),
+                },
+            )
