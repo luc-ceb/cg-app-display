@@ -1370,6 +1370,10 @@ with tab4:
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
     else:
+        # Inicializar session_state para guardar la propuesta
+        if "proposal_data" not in st.session_state:
+            st.session_state.proposal_data = None
+        
         col_1, col_2,col_3 = st.columns( 3 )
  
         with col_1:
@@ -1533,40 +1537,11 @@ with tab4:
  
                 prompt_completo = prompt_sistema + "\n\n--- DATOS ---\n\n" + resumen_datos
 
-                st.markdown(
-                    f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
-                    f"border-radius:12px; padding:20px; margin-bottom:16px;'>"
-                    f"<div style='font-size:11px; color:{NARANJA}; text-transform:uppercase; "
-                    f"letter-spacing:0.1em; margin-bottom:12px;'>Prompt generado — Copialo y pegalo en tu chat de IA</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                st.code(prompt_completo, language=None)
-                st.download_button(
-                    "📋 Descargar prompt como texto",
-                    data=prompt_completo,
-                    file_name=f"prompt_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    on_click=register_download_event,
-                    args=(
-                        branch_info.get("numero", st.session_state.user_franquicia),
-                        st.session_state.username,
-                        objetivo_sel,
-                        f"descarga_prompt_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}",
-                    ),
-                ) 
-                        
- 
-                # Tabla de socios candidatos (siempre se muestra, independiente del LLM)
-                st.markdown("---")
-                st.markdown("##### 📋 Lista de socios candidatos")
-                st.caption(f"{len(candidatos)} socios")
- 
+                # Preparar tabla de candidatos
                 tabla_candidatos = (
                     candidatos[["Nombre",'email','PhoneNumber1', "Ocasion de consumo", "Kilos", "Cantidad de compras",
                       "Dias desde ultima compra", "p_alive", "ProductoFavorito", "LineaProdFav"]]
-                    .copy() #.sort_values("p_alive", ascending=True)
+                    .copy()
                 )
                 tabla_candidatos["Kilos"] = tabla_candidatos["Kilos"].round(1)
                 tabla_candidatos["Dias desde ultima compra"] = tabla_candidatos["Dias desde ultima compra"].round(0).astype(int)
@@ -1584,33 +1559,77 @@ with tab4:
                     "LineaProdFav": "Línea de producto favorito",
                 }, inplace=True)
                 tabla_candidatos.drop(columns=["p_alive"], inplace=True)
+
+                # Guardar en session_state
+                st.session_state.proposal_data = {
+                    "prompt_completo": prompt_completo,
+                    "tabla_candidatos": tabla_candidatos,
+                    "objetivo_sel": objetivo_sel,
+                    "branch_numero": branch_info.get("numero", ""),
+                    "branch_heladeria": branch_info.get("heladeria", ""),
+                    "num_candidatos": len(candidatos),
+                }
+        
+        # Mostrar la propuesta si está guardada en session_state
+        if st.session_state.proposal_data is not None:
+                data = st.session_state.proposal_data
+                
+                st.markdown(
+                    f"<div style='background:rgba(0,0,0,0.2); border:1px solid rgba(236,126,4,0.3); "
+                    f"border-radius:12px; padding:20px; margin-bottom:16px;'>"
+                    f"<div style='font-size:11px; color:{NARANJA}; text-transform:uppercase; "
+                    f"letter-spacing:0.1em; margin-bottom:12px;'>Prompt generado — Copialo y pegalo en tu chat de IA</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                st.code(data["prompt_completo"], language=None)
+                st.download_button(
+                    "📋 Descargar prompt como texto",
+                    data=data["prompt_completo"],
+                    file_name=f"prompt_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    on_click=register_download_event,
+                    args=(
+                        data["branch_numero"],
+                        st.session_state.username,
+                        data["objetivo_sel"],
+                        f"descarga_prompt_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}",
+                    ),
+                ) 
+                        
+ 
+                # Tabla de socios candidatos
+                st.markdown("---")
+                st.markdown("##### 📋 Lista de socios candidatos")
+                st.caption(f"{data['num_candidatos']} socios")
  
                 st.dataframe(
-                    tabla_candidatos,
+                    data["tabla_candidatos"],
                     hide_index=True,
                     use_container_width=True,
                     height=400,
                 )
  
                 # Botón para descargar lista
-                csv = tabla_candidatos.to_csv(index=False).encode("utf-8")
-                download_detail = f"descarga_csv_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}"
+                csv = data["tabla_candidatos"].to_csv(index=False).encode("utf-8")
+                download_detail = f"descarga_csv_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}"
                 st.download_button(
                     "📥 Descargar lista de socios (CSV)",
                     data=csv,
-                    file_name=f"socios_promo_{branch_info.get('numero', '')}_{objetivo_sel.replace(' ', '_')}.csv",
+                    file_name=f"socios_promo_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     on_click=register_download_event,
                     args=(
-                        branch_info.get("numero", st.session_state.user_franquicia),
+                        data["branch_numero"],
                         st.session_state.username,
-                        objetivo_sel,
+                        data["objetivo_sel"],
                         download_detail,
                     ),
                 )
- 
-        elif not generar:
+        
+        elif st.session_state.proposal_data is None:
                 st.markdown(
                     "<div style='display:flex; align-items:center; justify-content:center; "
                     "height:400px; color:rgba(255,255,255,0.3); font-size:14px; text-align:center;'>"
