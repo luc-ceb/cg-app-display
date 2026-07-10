@@ -467,14 +467,15 @@ b_data = b_data.fillna("N/A")
 def clean_numeric_columns_for_display(df):
     """Convierte 'N/A' a NaN en columnas numéricas para evitar errores de Arrow en Streamlit"""
     df = df.copy()
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    for col in numeric_cols:
-        if df[col].dtype == 'object':  # Si la columna es object (mezclada)
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-    # También intenta convertir explícitamente columnas que contienen "Días" o son numéricas
     for col in df.columns:
-        if df[col].dtype == 'object' and ('Días' in col or 'Dias' in col or 'edad' in col.lower()):
-            df[col] = pd.to_numeric(df[col].astype(str).str.replace('N/A', 'NaN'), errors='coerce')
+        if df[col].dtype == 'object':
+            # Reemplazar 'N/A' con NaN real
+            df[col] = df[col].replace('N/A', np.nan)
+            # Intentar convertir a numérico
+            try:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            except:
+                pass  # Si no se puede convertir, dejar como está
     return df
 
 # ─────────────────────────────────────────────
