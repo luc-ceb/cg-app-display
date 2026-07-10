@@ -460,23 +460,13 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 b_data = load_branch(selected_bid)
 
-# Reemplazar nulos con N/A
-b_data = b_data.fillna("N/A")
+# Identificar columnas numéricas ANTES de llenar
+numeric_cols = b_data.select_dtypes(include=[np.number]).columns.tolist()
 
-# Función para convertir "N/A" de vuelta a NaN en columnas numéricas para mostrar en Streamlit
-def clean_numeric_columns_for_display(df):
-    """Convierte 'N/A' a NaN en columnas numéricas para evitar errores de Arrow en Streamlit"""
-    df = df.copy()
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            # Reemplazar 'N/A' con NaN real
-            df[col] = df[col].replace('N/A', np.nan)
-            # Intentar convertir a numérico
-            try:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            except:
-                pass  # Si no se puede convertir, dejar como está
-    return df
+# Reemplazar nulos con N/A SOLO en columnas no numéricas
+for col in b_data.columns:
+    if col not in numeric_cols and b_data[col].dtype == 'object':
+        b_data[col] = b_data[col].fillna("N/A")
 
 # ─────────────────────────────────────────────
 # KPIs
@@ -1057,8 +1047,6 @@ with tab1:
             "email": "Email",
             "estado": "Estado",
         }, inplace=True)
-        
-        tabla_app = clean_numeric_columns_for_display(tabla_app)
 
         st.dataframe(tabla_app, hide_index=True, use_container_width=True, height=350)
 
@@ -1179,8 +1167,6 @@ with tab2:
         valiosos.rename(columns={'LineaProdFav':'Linea Producto Favorito','Kilos':'Kg/año','PhoneNumber1':'Telefono','frecuencia':'Frecuencia de compra (dias)'},inplace=True)
         valiosos['Kg/año'] = valiosos['Kg/año'].round(2)
         valiosos.drop(columns=['p_alive'],inplace=True)
-        
-        valiosos = clean_numeric_columns_for_display(valiosos)
         st.dataframe(valiosos, hide_index=True, use_container_width=True)
 
         st.divider()
@@ -1214,9 +1200,7 @@ with tab2:
             "ProductoFavorito":"Producto Favorito",
             "LineaProdFav":"Linea Producto Favorito"
         }, inplace=True)
-        top_churn .drop(columns=['p_alive','Frecuencia de compra (dias)'],inplace=True)
-        
-        top_churn = clean_numeric_columns_for_display(top_churn)
+        top_churn .drop(columns=['p_alive','Frecuencia de compra (dias)'],inplace=True) 
 
         st.dataframe(
             top_churn,
@@ -1580,8 +1564,6 @@ with tab4:
                     "LineaProdFav": "Línea de producto favorito",
                 }, inplace=True)
                 tabla_candidatos.drop(columns=["p_alive"], inplace=True)
-                
-                tabla_candidatos = clean_numeric_columns_for_display(tabla_candidatos)
 
                 # Guardar en session_state
                 st.session_state.proposal_data = {
