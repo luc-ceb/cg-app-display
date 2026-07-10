@@ -479,8 +479,21 @@ pct_penetracion = round(penetracion * 100) if penetracion is not None and not pd
 pct_churn = round(
     (b_data["estado"].isin(["En riesgo", "Abandonado"])).mean() * 100, 1
 ) if n_total > 0 else 0
-clientes_totales = branch_info .get("Total clientes", 0)
-
+# Definicion de clientes totales a partir de socios favoritos
+#clientes_totales = branch_info .get("Total clientes", 0)
+# Total de socios de la sucursal seleccionada
+total_socios = n_total
+# Clientes equivalentes provenientes de socios
+clientes_socios = total_socios * (0.13 + 0.87 * 2.9)
+# Clientes equivalentes no socios
+clientes_no_socios = (
+    branch_info["Kilos mostrador"]
+    * (1 - branch_info["Penetracion Club"])
+    / 4.4
+)
+total_clientes_no_socios = clientes_no_socios * (0.13 + 0.87 * 2.9)
+# Total clientes
+clientes_totales = int(clientes_socios + total_clientes_no_socios)
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Socios Activos", f"{int(socios_activos):,}", help="Socios activos en el último año")
@@ -488,7 +501,7 @@ k2.metric("Kg Vendidos Club", f"{kg_club:,.0f} kg",help="Kilogramos vendidos por
 k3.metric("Penetración Club", f"{pct_penetracion}%",help="Porcentaje de kilos vendidos a través del Club sobre el total de ventas mostrador")
 k4.metric("Socios en riesgo", f"{pct_churn}%", delta_color="inverse", help="Porcentaje de socios en estado en riesgo o abandonado")
 # Barra de penetración sobre población de la zona
-poblacion_zona = 30000
+poblacion_zona = 20000
 pct_cobertura = int(clientes_totales) / poblacion_zona * 100 if poblacion_zona > 0 else 0
 st.markdown(
     f"""
