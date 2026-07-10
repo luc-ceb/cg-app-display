@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import io
 import pydeck as pdk
 import base64
 import sqlite3
@@ -134,10 +135,10 @@ st.set_page_config(
 OCASION_ICONS = {
     "Alimentación": "🍽️",
     "Consumo en Local": "🍦",
+    "Consumo en el hogar":"🏠",
     "Familia / Niños": "👨‍👩‍👧",
-    "Individual": "🎯",
     "Social / Eventos": "🎉",
-    "Stock / Abastecimiento": "📦",
+
 }
 
 NARANJA = "#ec7e04"
@@ -159,9 +160,8 @@ OCASION_COLORS = {
     "Alimentación": NARANJA,
     "Consumo en Local": CELESTE,
     "Familia / Niños": ROSA,
-    "Individual": "#f1c40f",       # amarillo
-    "Social / Eventos": VERDE,
-    "Stock / Abastecimiento": "#9b59b6",  # violeta
+    "Consumo en el hogar": "#f1c40f",       # amarillo
+    "Social / Eventos": VERDE
 }
 
 ESTADO_COLORS = {"Activo": VERDE, "En Riesgo": "#f39c12", "Abandonado": ROJO}
@@ -178,12 +178,11 @@ PLOTLY_LAYOUT = dict(
 # ─────────────────────────────────────────────
 
 DESCRIPCIONES_OCASION = {
-    "Alimentación": "Clientes enfocados en alimentos congelados. Compra concentrada en horario nocturno.",
-    "Consumo en Local": "Priorizan la experiencia en la heladería: cucuruchos, batidos, sundaes. Perfil joven.",
+    "Alimentación": "Clientes enfocados en alimentos congelados. Compra con propósito de alimentación, concentrada en horario nocturno.",
+    "Consumo en Local": "Priorizan la experiencia en la heladería: cucuruchos, batidos, sundaes. Perfil joven, alta frecuencia.",
+    "Consumo en el hogar": "Compran pote y granel de forma planificada para abastecer la heladera de la casa.",
     "Familia / Niños": "Familias que combinan productos infantiles con surtidos para adultos.",
-    "Individual": "Consumidores de impulso con tickets pequeños: bombones, palitos, frutas bañadas.",
-    "Social / Eventos": "Orientados a reuniones, celebraciones y consumo grupal. Tickets de mayor valor.",
-    "Stock / Abastecimiento": "Compran pote y granel de forma planificada para consumo en el hogar.",
+    "Social / Eventos": "Orientados a reuniones, celebraciones y consumo grupal. Incluye tortas heladas.",
 }
 
 # ─────────────────────────────────────────────
@@ -519,23 +518,6 @@ st.markdown(
 )
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-def mostrar_leyenda_ocasiones(df_datos, titulo="##### ¿En qué ocasión consumen?"):
-    st.markdown(titulo)
-    # Iteramos sobre todos los segmentos definidos
-    for seg_name, desc in DESCRIPCIONES_OCASION.items():
-        color = SEGMENT_COLORS.get(seg_name, GRIS) # Usará gris si no está en SEGMENT_COLORS
-        # Contamos cuántos registros hay en el dataframe que le pasemos
-        cnt = int((df_datos["Ocasion de consumo"] == seg_name).sum())
-        
-        st.markdown(
-            f"<div style='margin:4px 0; cursor:help;'>"
-            f"<span style='color:{color}; font-size:16px;'>●</span> "
-            f"<b>{seg_name}</b> ({cnt})"
-            f"<div style='font-size:10px; color:rgba(255,255,255,0.4); margin-left:20px;'>{desc}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
 
 def mostrar_leyenda_ocasiones(df_datos, titulo="¿En qué ocasión consumen? - Descripción de los segmentos"):
     st.markdown(
@@ -1045,11 +1027,48 @@ with tab1:
     if len(socios_app) == 0:
         st.info("No hay socios con App en este punto de venta.")
     else:
-        st.caption(f"{len(socios_app)} socios con App de {n_total} totales ({len(socios_app)/n_total*100:.0f}%)")
+        # ── Filtros ──
+        fc1, fc2, fc3 = st.columns(3)
 
-        tabla_app = socios_app[["Nombre", "Kilos", "Cantidad de compras", "Dias desde ultima compra",
-                                 "Dias desde ultimo ingreso app",
-                                "estado", "PhoneNumber1", "email"]].copy()
+        with fc1:
+            estados_disp = ["Todos"] + sorted(socios_app["estado"].dropna().unique().tolist())
+            estado_sel = st.selectbox("Estado", options=estados_disp, key="app_estado_filter")
+
+        with fc2:
+            dmax_compra = int(socios_app["Dias desde ultima compra"].max())
+            rango_compra = st.slider(
+                "Días desde última compra",
+                min_value=0, max_value=dmax_compra,
+                value=(0, dmax_compra),
+                key="app_dias_compra_filter",
+            )
+
+        with fc3:
+            dmax_app = int(socios_app["Dias desde ultimo ingreso app"].max())
+            rango_app = st.slider(
+                "Días desde último ingreso app",
+                min_value=0, max_value=dmax_app,
+                value=(0, dmax_app),
+                key="app_dias_app_filter",
+            )
+
+        # Aplicar filtros
+        app_filtrado = socios_app.copy()
+        if estado_sel != "Todos":
+            app_filtrado = app_filtrado[app_filtrado["estado"] == estado_sel]
+        app_filtrado = app_filtrado[
+            (app_filtrado["Dias desde ultima compra"] >= rango_compra[0])
+            & (app_filtrado["Dias desde ultima compra"] <= rango_compra[1])
+            & (app_filtrado["Dias desde ultimo ingreso app"] >= rango_app[0])
+            & (app_filtrado["Dias desde ultimo ingreso app"] <= rango_app[1])
+        ]
+
+        st.caption(f"{len(app_filtrado)} socios con App (de {len(socios_app)} con app · {n_total} totales)")
+
+        # Tabla en pantalla (vista completa)
+        tabla_app = app_filtrado[["Nombre", "Kilos", "Cantidad de compras", "Dias desde ultima compra",
+                                  "Dias desde ultimo ingreso app",
+                                  "estado", "PhoneNumber1", "email"]].copy()
         tabla_app["Kilos"] = tabla_app["Kilos"].round(1)
         tabla_app.rename(columns={
             "Kilos": "Kg/año",
@@ -1063,12 +1082,20 @@ with tab1:
 
         st.dataframe(tabla_app, hide_index=True, use_container_width=True, height=350)
 
-        csv_app = tabla_app.to_csv(index=False).encode("utf-8-sig")
+        # Descarga en Excel: solo DNI, Nombre y email
+        export_df = app_filtrado[["DNI", "Nombre", "email"]].copy()
+        export_df.rename(columns={"email": "Email"}, inplace=True)
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            export_df.to_excel(writer, index=False, sheet_name="Socios con App")
+        buffer.seek(0)
+
         st.download_button(
-            "📥 Descargar socios con App (CSV)",
-            data=csv_app,
-            file_name=f"socios_app_{branch_info.get('numero', '')}.csv",
-            mime="text/csv",
+            "📥 Descargar socios con App (Excel)",
+            data=buffer,
+            file_name=f"socios_app_{branch_info.get('numero', '')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
 
@@ -1077,12 +1104,17 @@ with tab1:
     st.caption(f"{n_total} socios en este punto de venta")
     d_download = b_data[['Nombre','email','PhoneNumber1','edad','Dias desde ultima compra','Kilos','Cantidad de compras','ProductoFavorito','LineaProdFav','DiasDesdeUltimaCompra','estado','Tiene App','Dias desde ultimo ingreso app']]
     d_download = d_download.rename(columns={'PhoneNumber1':'Num tel','edad':'Edad','Kilos':'Kilos ult año','ProductoFavorito':'Prod Fav','LineaProdFav':'Linea Prod Fav','DiasDesdeUltimaCompra':'Dias desde ult comp','estado':'Estado'})
-    csv_completo = d_download .to_csv(index=False).encode("utf-8-sig")
+    
+    buffer_completo = io.BytesIO()
+    with pd.ExcelWriter(buffer_completo, engine="openpyxl") as writer:
+        d_download.to_excel(writer, index=False, sheet_name="Base completa")
+    buffer_completo.seek(0)
+
     st.download_button(
-        "📥 Descargar base completa (CSV)",
-        data=csv_completo,
-        file_name=f"socios_completo_{branch_info.get('numero', '')}.csv",
-        mime="text/csv",
+        "📥 Descargar base completa (Excel)",
+        data=buffer_completo,
+        file_name=f"socios_completo_{branch_info.get('numero', '')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
 
@@ -1182,6 +1214,19 @@ with tab2:
         valiosos.drop(columns=['p_alive'],inplace=True)
         st.dataframe(valiosos, hide_index=True, use_container_width=True)
 
+        buffer_valiosos = io.BytesIO()
+        with pd.ExcelWriter(buffer_valiosos, engine="openpyxl") as writer:
+            valiosos.to_excel(writer, index=False, sheet_name="Socios valiosos")
+        buffer_valiosos.seek(0)
+
+        st.download_button(
+            "📥 Descargar socios valiosos (Excel)",
+            data=buffer_valiosos,
+            file_name=f"socios_valiosos_{branch_info.get('numero', '')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
         st.divider()
         st.markdown("##### Clientes con alto riesgo de abandono o que ya abandonaron")
         top_churn = (
@@ -1220,14 +1265,19 @@ with tab2:
             hide_index=True,
             use_container_width=True,
             height=600,
-            column_config={
-                "Kg/año": st.column_config.ProgressColumn(
-                    "Kg/año", min_value=0, max_value=float(b_data["Kilos"].max()),
-                    format="%.1f",
-                ),  
-            },
         )
+        buffer_churn = io.BytesIO()
+        with pd.ExcelWriter(buffer_churn, engine="openpyxl") as writer:
+            top_churn.to_excel(writer, index=False, sheet_name="Alto riesgo")
+        buffer_churn.seek(0)
 
+        st.download_button(
+            "📥 Descargar clientes en riesgo (Excel)",
+            data=buffer_churn,
+            file_name=f"clientes_riesgo_{branch_info.get('numero', '')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
 
 
 
@@ -1254,40 +1304,54 @@ with tab3:
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
     else:
+        # Las 5 categorías oficiales (tal como están en b_data["Ocasion de consumo"])
+        CATEGORIAS_VALIDAS = ["Alimentación", "Consumo en Local", "Consumo en el hogar",
+                              "Familia / Niños", "Social / Eventos"]
+
+        b_data_seg = b_data[b_data["Ocasion de consumo"].isin(CATEGORIAS_VALIDAS)].copy()
+
         # ───────── FILA 1 ─────────
         row1_col1, row1_col2 = st.columns([1, 1])
 
-        # [Fila 1 · Col 1] Donut de distribución por ocasión
+        # [Fila 1 · Col 1] Donut de distribución por ocasión (desde c_franquicias)
         with row1_col1:
-            seg_dist = b_data["Ocasion de consumo"].value_counts()
-            colors_ordered = [OCASION_COLORS.get(s, GRIS) for s in seg_dist.index]
+            ocasiones_cols = ["Alimentación", "Consumo en Local", "Consumo en el hogar",
+                              "Familia / Niños", "Social / Eventos"]
 
-            fig_donut = go.Figure(data=[go.Pie(
-                labels=seg_dist.index,
-                values=seg_dist.values,
-                hole=0.55,
-                marker=dict(colors=colors_ordered, line=dict(color=AZUL_OSCURO, width=2)),
-                textinfo="percent+label",
-                textfont=dict(size=12, color="white"),
-                hovertemplate="<b>%{label}</b><br>Clientes: %{value}<br>%{percent}<extra></extra>",
-            )])
-            fig_donut.update_layout(
-                **PLOTLY_LAYOUT,
-                height=420,
-                showlegend=False,
-                title=dict(text="Distribución por Ocasión", font=dict(size=14)),
-                annotations=[dict(
-                    text=f"<b>{n_total}</b><br>socios",
-                    x=0.5, y=0.5, font_size=18, showarrow=False,
-                    font=dict(color="#e8ecf4"),
-                )],
-            )
-            st.plotly_chart(fig_donut, use_container_width=True)
+            seg_labels = []
+            seg_values = []
+            for col in ocasiones_cols:
+                valor = branch_info.get(col, None)
+                if valor is not None and not pd.isna(valor):
+                    seg_labels.append(col)
+                    seg_values.append(float(valor))
+
+            if len(seg_values) == 0:
+                st.info("No hay datos de ocasión de consumo para esta franquicia.")
+            else:
+                colors_ordered = [OCASION_COLORS.get(s, GRIS) for s in seg_labels]
+
+                fig_donut = go.Figure(data=[go.Pie(
+                    labels=seg_labels,
+                    values=seg_values,
+                    hole=0.55,
+                    marker=dict(colors=colors_ordered, line=dict(color=AZUL_OSCURO, width=2)),
+                    textinfo="percent+label",
+                    textfont=dict(size=12, color="white"),
+                    hovertemplate="<b>%{label}</b><br>%{percent}<extra></extra>",
+                )])
+                fig_donut.update_layout(
+                    **PLOTLY_LAYOUT,
+                    height=420,
+                    showlegend=False,
+                    title=dict(text="Distribución por Ocasión", font=dict(size=14)),
+                )
+                st.plotly_chart(fig_donut, use_container_width=True)
 
         # [Fila 1 · Col 2] Leyenda descriptiva de los segmentos
         with row1_col2:
             mostrar_leyenda_ocasiones(
-                b_data,
+                b_data_seg,
                 titulo="¿En qué ocasión consumen? — Descripción de los segmentos",
             )
 
@@ -1295,8 +1359,10 @@ with tab3:
 
         st.markdown("##### Kg Promedio por Segmento")
         seg_kg = (
-                b_data.groupby("Ocasion de consumo")["Kilos"]
+                b_data_seg.groupby("Ocasion de consumo")["Kilos"]
                 .mean()
+                .reindex(CATEGORIAS_VALIDAS)
+                .dropna()
                 .sort_values(ascending=True)
             )
         fig_kg = go.Figure(data=[go.Bar(
@@ -1318,13 +1384,15 @@ with tab3:
 
         st.markdown("##### Métricas por Segmento")
         seg_summary = (
-                b_data.groupby("Ocasion de consumo")
+                b_data_seg.groupby("Ocasion de consumo")
                 .agg(
                     Socios=("CustomerId", "count"),
                     Kg_Promedio=("Kilos", "mean"),
                     Compras_Promedio=("Cantidad de compras", "mean"),
                     P_alive_Promedio=("p_alive", "mean"),
                 )
+                .reindex(CATEGORIAS_VALIDAS)
+                .dropna(subset=["Socios"])
                 .sort_values("Socios", ascending=False)
                 .reset_index()
                 .rename(columns={"Ocasion de consumo": "Segmento"})
@@ -1358,11 +1426,11 @@ with tab3:
 
 # Mapeo línea de producto → ocasiones de consumo afines
 PRODUCTO_OCASION = {
-    "Pote/Familiar": ["Stock / Abastecimiento", "Social / Eventos"],
-    "Granel": ["Stock / Abastecimiento", "Social / Eventos"],
-    "Bombones" : ["Stock / Abastecimiento", "Social / Eventos"],
+    "Pote/Familiar": ["Consumo en el hogar", "Social / Eventos"],
+    "Granel": ["Consumo en el hogar", "Social / Eventos"],
+    "Bombones" : ["Consumo en el hogar", "Social / Eventos"],
     "Tortas / Postres": ["Social / Eventos"],
-    "Palitos": ["Individual", "Familia / Niños"],
+    "Palitos": ["Consumo en el hogar", "Familia / Niños"],
     "Consumo en mostrador": ["Consumo en Local"],
     "Alimento Congelado": ["Alimento Congelado"],
 }
@@ -1416,29 +1484,24 @@ with tab4:
                 ocasiones_afines.extend(PRODUCTO_OCASION.get(prod, []))
         ocasiones_afines = list(set(ocasiones_afines))
  
+        # Un socio es afín si ocasion_1 O ocasion_2 está en las ocasiones afines
+        mask_ocasion = (
+            b_data["ocasion_1"].isin(ocasiones_afines)
+            | b_data["ocasion_2"].isin(ocasiones_afines)
+        )
+
         if objetivo_sel == "Recuperar socios inactivos":
-                candidatos = b_data[
-                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
-                    & (b_data["p_alive"] < 0.85)
-                ]
+                candidatos = b_data[mask_ocasion & (b_data["p_alive"] < 0.85)]
                 filtro_desc = "Riesgo de abandono medio/alto"
         elif objetivo_sel == "Premiar socios fieles":
-                candidatos = b_data[
-                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
-                    & (b_data["p_alive"] >= 0.85)
-                ]
+                candidatos = b_data[mask_ocasion & (b_data["p_alive"] >= 0.85)]
                 filtro_desc = "Socios activos - bajo riesgo de abandono"
         elif objetivo_sel == "Aumentar ticket promedio":
                 mediana_kg = b_data["Kilos"].median()
-                candidatos = b_data[
-                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
-                    & (b_data["Kilos"] <= mediana_kg)
-                ]
+                candidatos = b_data[mask_ocasion & (b_data["Kilos"] <= mediana_kg)]
                 filtro_desc = f"Socios con consumo ≤ {mediana_kg:.1f} kg (bajo la mediana)"
         elif objetivo_sel == "Liquidar stock":
-                candidatos = b_data[
-                    (b_data["Ocasion de consumo"].isin(ocasiones_afines))
-                ]
+                candidatos = b_data[mask_ocasion]
                 filtro_desc = "Todos los socios de las ocasiones afines"
         else:
                 candidatos = pd.DataFrame()
@@ -1629,14 +1692,18 @@ with tab4:
                     height=400,
                 )
  
-                # Botón para descargar lista
-                csv = data["tabla_candidatos"].to_csv(index=False).encode("utf-8")
-                download_detail = f"descarga_csv_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}"
+                # Botón para descargar lista en Excel
+                buffer_cand = io.BytesIO()
+                with pd.ExcelWriter(buffer_cand, engine="openpyxl") as writer:
+                    data["tabla_candidatos"].to_excel(writer, index=False, sheet_name="Candidatos")
+                buffer_cand.seek(0)
+
+                download_detail = f"descarga_excel_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}"
                 st.download_button(
-                    "📥 Descargar lista de socios (CSV)",
-                    data=csv,
-                    file_name=f"socios_promo_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}.csv",
-                    mime="text/csv",
+                    "📥 Descargar lista de socios (Excel)",
+                    data=buffer_cand,
+                    file_name=f"socios_promo_{data['branch_numero']}_{data['objetivo_sel'].replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                     on_click=register_download_event,
                     args=(
