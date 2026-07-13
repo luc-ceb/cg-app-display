@@ -133,7 +133,7 @@ st.set_page_config(
 )
 
 OCASION_ICONS = {
-    "Alimentación": "🍽️",
+    "Alimento congelado": "🍽️",
     "Consumo en Local": "🍦",
     "Consumo en el hogar":"🏠",
     "Familia / Niños": "👨‍👩‍👧",
@@ -157,7 +157,7 @@ SEGMENT_COLORS = {
     "Regalo/Ocasional": "#f1c40f",
 }
 OCASION_COLORS = {
-    "Alimentación": NARANJA,
+    "Alimento congelado": NARANJA,
     "Consumo en Local": CELESTE,
     "Familia / Niños": ROSA,
     "Consumo en el hogar": "#f1c40f",       # amarillo
@@ -178,7 +178,7 @@ PLOTLY_LAYOUT = dict(
 # ─────────────────────────────────────────────
 
 DESCRIPCIONES_OCASION = {
-    "Alimentación": "Clientes enfocados en alimentos congelados. Compra con propósito de alimentación, concentrada en horario nocturno.",
+    "Alimento congelado": "Clientes enfocados en alimentos congelados. Compra con propósito de alimentación, concentrada en horario nocturno.",
     "Consumo en Local": "Priorizan la experiencia en la heladería: cucuruchos, batidos, sundaes. Perfil joven, alta frecuencia.",
     "Consumo en el hogar": "Compran pote y granel de forma planificada para abastecer la heladera de la casa.",
     "Familia / Niños": "Familias que combinan productos infantiles con surtidos para adultos.",
@@ -407,8 +407,11 @@ with st.sidebar:
         if selected_localidad != "Todas":
             filtered_franq = filtered_franq[filtered_franq["localidad"] == selected_localidad]
 
-        FRANQUICIAS_DESTACADAS = ["3183","3008", "4444", "4552", "4489", "4544", "3875", "3807",
-                                  "4248", "4201", "5462", "3835", "4340", "3212", "3006"]
+        FRANQUICIAS_DESTACADAS = ["3013","3605","3662","3774",
+                                  "3927","4294","3877","4037", 
+                                  "5265", "5439", "4168", 
+                                  "5265", "4170", "5575",
+                                   "5375"]
 
         destacadas = filtered_franq[filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
         otras = filtered_franq[~filtered_franq["numero"].isin(FRANQUICIAS_DESTACADAS)]
@@ -536,7 +539,6 @@ def mostrar_leyenda_ocasiones(df_datos, titulo="¿En qué ocasión consumen? - D
                 <div style="font-size:13px; font-weight:600; color:#e8ecf4;">
                     {seg_name}
                     <span style="color:{color}; font-weight:700; margin-left:6px;">{cnt}</span>
-                    <span style="font-size:10px; color:rgba(255,255,255,0.4);"> · {pct:.0f}%</span>
                 </div>
                 <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px; line-height:1.4;">
                     {desc}
@@ -565,15 +567,16 @@ tab_names = [
     "💓 Estado de Socios",
     "🍦 Ocasión de Consumo",
     "🤖 Asistente Comercial",
-    "🎯 Gestioná con Club Grido",
     "📈 Evolución de Ventas",
+    "🎯 Gestioná con Club Grido",
+    
 
 ]
 if st.session_state.user_franquicia == "todas":
     tab_names.append("📊 Métricas")
 tabs = st.tabs(tab_names)
 
-tab1, tab2, tab3, tab4, tab5 , tab6 = tabs[:6]
+tab1, tab2, tab3, tab4, tab_ventas , tab_gestiona = tabs[:6]
 tab_metrics = tabs[6] if len(tabs) == 7 else None
 
 if tab_metrics is not None:
@@ -682,9 +685,17 @@ with tab1:
 
     total_socios = len(b_data)
 
-    # TODO: reemplazar por cálculo real cuando tengas snapshot semanal
-    # Ej: pct_incremento = (total_socios - total_socios_semana_pasada) / total_socios_semana_pasada * 100
-    pct_incremento = np.round(np.random.uniform(1, 10), 1)
+    cant_socios = branch_info .get("Cant socios", 0)
+    cant_socios_semana_pasada = branch_info .get("Cant socios t-1", 0)
+
+    cant_socios = int(cant_socios) if cant_socios is not None and not pd.isna(cant_socios) else 0
+    cant_socios_semana_pasada = int(cant_socios_semana_pasada) if cant_socios_semana_pasada is not None and not pd.isna(cant_socios_semana_pasada) else 0
+
+    if cant_socios_semana_pasada > 0:
+        pct_incremento = (cant_socios - cant_socios_semana_pasada) / cant_socios_semana_pasada * 100
+    else:
+        pct_incremento = 0.0
+
     signo = "+" if pct_incremento >= 0 else ""
     color_delta = VERDE if pct_incremento >= 0 else ROJO
 
@@ -744,7 +755,7 @@ with tab1:
             hovertemplate="<b>%{label}</b><br>%{value} clientes<br>%{percent}<extra></extra>",
         )])
         
-        # Corrección aquí: Combinamos el diccionario antes de desempaquetar
+        # Combinamos el diccionario antes de desempaquetar
         fig_estado.update_layout(
             **{**PLOTLY_LAYOUT, 
                "margin": dict(l=0, r=0, t=10, b=10), 
@@ -788,7 +799,6 @@ with tab1:
             hovertemplate="<b>%{label}</b><br>%{value} clientes<br>%{percent}<extra></extra>",
         )])
         
-        # Corrección aquí también
         fig_app.update_layout(
             **{**PLOTLY_LAYOUT, 
                "margin": dict(l=0, r=0, t=10, b=10), 
@@ -1305,7 +1315,7 @@ with tab3:
         st.info("No hay socios para este punto de venta.")
     else:
         # Las 5 categorías oficiales (tal como están en b_data["Ocasion de consumo"])
-        CATEGORIAS_VALIDAS = ["Alimentación", "Consumo en Local", "Consumo en el hogar",
+        CATEGORIAS_VALIDAS = ["Alimento congelado", "Consumo en Local", "Consumo en el hogar",
                               "Familia / Niños", "Social / Eventos"]
 
         b_data_seg = b_data[b_data["Ocasion de consumo"].isin(CATEGORIAS_VALIDAS)].copy()
@@ -1315,7 +1325,7 @@ with tab3:
 
         # [Fila 1 · Col 1] Donut de distribución por ocasión (desde c_franquicias)
         with row1_col1:
-            ocasiones_cols = ["Alimentación", "Consumo en Local", "Consumo en el hogar",
+            ocasiones_cols = ["Alimento congelado", "Consumo en Local", "Consumo en el hogar",
                               "Familia / Niños", "Social / Eventos"]
 
             seg_labels = []
@@ -1576,7 +1586,6 @@ with tab4:
 
                 REGLAS IMPORTANTES:
                 - Usá los datos concretos que te paso (cantidades, porcentajes, productos favoritos) en tu respuesta.
-                - Nunca especifiques el valor especifico de p_alive, solo si tienen riesgo de abandono alto, medio o bajo.
                 - La promoción debe ser DIFERENTE según el objetivo:
                 * "Recuperar inactivos": enfocate en urgencia y nostalgia, no menciones cuántos días promedio llevan sin comprar solo si llevan muchos o pocos dias sin comprar.
                 * "Premiar fieles": enfocate en exclusividad y agradecimiento, mencioná si su frecuencia de compra es alta o baja, no des cifras específicas.
@@ -1725,21 +1734,9 @@ with tab4:
 
 
 # ═══════════════════════════════════════════════
-# TAB 5 — GESTIONÁ CON CLUB GRIDO
+# TAB 5 — EVOLUCIÓN DE VENTAS
 # ═══════════════════════════════════════════════
-with tab5:
-    st.markdown("#### Gestioná con Club Grido")
-    st.caption("Herramientas de gestión para tu comunidad de socios.")
-
-    col_l, col_c, col_r = st.columns([1, 3, 1])
-    with col_c:
-        st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
-
-
-# ═══════════════════════════════════════════════
-# TAB 6 — EVOLUCIÓN DE VENTAS
-# ═══════════════════════════════════════════════
-with tab6:
+with tab_ventas:
     st.markdown("#### 📈 Evolución de Ventas por Producto")
     st.caption("Visualizá la evolución de kilos vendidos en tu franquicia, filtrando por rango de fechas y productos.")
 
@@ -2087,3 +2084,14 @@ with tab6:
                     ),
                 },
             )
+
+# ═══════════════════════════════════════════════
+# TAB 5 — GESTIONÁ CON CLUB GRIDO
+# ═══════════════════════════════════════════════
+with tab_gestiona:
+    st.markdown("#### Gestioná con Club Grido")
+    st.caption("Herramientas de gestión para tu comunidad de socios.")
+
+    col_l, col_c, col_r = st.columns([1, 3, 1])
+    with col_c:
+        st.image("assets/Info Gestión de Socios Favoritos Grido.png", use_container_width=True)
