@@ -743,38 +743,41 @@ if tab_metrics is not None:
 with tab1:
     st.markdown("#### Resumen de Mi Comunidad")
     
-    with st.expander("📊 Cómo clasificamos a los socios", expanded=False):
-        st.markdown("""
-        El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
-        
-        ---
-        
-        ### Si te compró/canjeó una sola vez
-        
-        Todavía no sabemos cuál es su ritmo, así que solo miramos el tiempo:
-        
-        - Hace menos de 3 meses → **🟢 Activo**. Es reciente, puede volver.
-        - Entre 3 meses y 1 año → **🟡 En riesgo**. Se está enfriando.
-        - Más de 1 año → **🔴 Abandonado**.
-        
-        ---
-        
-        ### Si te compró varias veces
-        
-        Acá ya conocemos su ritmo habitual, así que el sistema detecta cuando ese ritmo se rompe:
-        
-        - **🔴 Abandonado** — Pasó más de un año sin comprar/canjear, o el sistema estima que es muy poco probable que vuelva.
-        - **🟡 En riesgo** — Pasó más de 6 meses sin comprar, o el sistema detecta que se cortó su patrón de compra.
-        - **🟢 Activo** — Sigue comprando con la regularidad de siempre.
-        
-        ---
-        
-        ### Lo importante
-        
-        Un socio puede caer en riesgo por dos motivos: porque pasó mucho tiempo sin venir, o porque venía comprando seguido y de golpe cortó.
-        
-        Los socios **En riesgo** son tu mayor oportunidad: todavía se pueden recuperar con una promo bien dirigida. Los **Abandonados** necesitan una acción más fuerte.
-        """)
+    st.markdown("""
+    <details>
+    <summary style="cursor: pointer; font-weight: 600; padding: 12px; user-select: none;">📊 Cómo clasificamos a los socios</summary>
+    
+    El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
+    
+    ---
+    
+    ### Si te compró/canjeó una sola vez
+    
+    Todavía no sabemos cuál es su ritmo, así que solo miramos el tiempo:
+    
+    - Hace menos de 3 meses → **🟢 Activo**. Es reciente, puede volver.
+    - Entre 3 meses y 1 año → **🟡 En riesgo**. Se está enfriando.
+    - Más de 1 año → **🔴 Abandonado**.
+    
+    ---
+    
+    ### Si te compró varias veces
+    
+    Acá ya conocemos su ritmo habitual, así que el sistema detecta cuando ese ritmo se rompe:
+    
+    - **🔴 Abandonado** — Pasó más de un año sin comprar/canjear, o el sistema estima que es muy poco probable que vuelva.
+    - **🟡 En riesgo** — Pasó más de 6 meses sin comprar, o el sistema detecta que se cortó su patrón de compra.
+    - **🟢 Activo** — Sigue comprando con la regularidad de siempre.
+    
+    ---
+    
+    ### Lo importante
+    
+    Un socio puede caer en riesgo por dos motivos: porque pasó mucho tiempo sin venir, o porque venía comprando seguido y de golpe cortó.
+    
+    Los socios **En riesgo** son tu mayor oportunidad: todavía se pueden recuperar con una promo bien dirigida. Los **Abandonados** necesitan una acción más fuerte.
+    </details>
+    """, unsafe_allow_html=True)
 
     total_socios = len(b_data)
 
@@ -1239,38 +1242,42 @@ with tab2:
         unsafe_allow_html=True,
     )
     
-    with st.expander("📊 Cómo clasificamos a los socios", expanded=False):
-        st.markdown("""
-        El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
-        
-        ---
-        
-        ### Si te compró/canjeó una sola vez
-        
-        Todavía no sabemos cuál es su ritmo, así que solo miramos el tiempo:
-        
-        - Hace menos de 3 meses → **🟢 Activo**. Es reciente, puede volver.
-        - Entre 3 meses y 1 año → **🟡 En riesgo**. Se está enfriando.
-        - Más de 1 año → **🔴 Abandonado**.
-        
-        ---
-        
-        ### Si te compró varias veces
-        
-        Acá ya conocemos su ritmo habitual, así que el sistema detecta cuando ese ritmo se rompe:
-        
-        - **🔴 Abandonado** — Pasó más de un año sin comprar/canjear, o el sistema estima que es muy poco probable que vuelva.
-        - **🟡 En riesgo** — Pasó más de 6 meses sin comprar, o el sistema detecta que se cortó su patrón de compra.
-        - **🟢 Activo** — Sigue comprando con la regularidad de siempre.
-        
-        ---
-        
-        ### Lo importante
-        
-        Un socio puede caer en riesgo por dos motivos: porque pasó mucho tiempo sin venir, o porque venía comprando seguido y de golpe cortó.
-        
-        Los socios **En riesgo** son tu mayor oportunidad: todavía se pueden recuperar con una promo bien dirigida. Los **Abandonados** necesitan una acción más fuerte.
-        """)
+    
+    st.markdown("""
+    <details>
+    <summary style="cursor: pointer; font-weight: 600; padding: 12px; user-select: none;">📊 Cómo clasificamos a los socios</summary>
+    
+    El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
+    
+    ---
+    
+    ### Si te compró/canjeó una sola vez
+    
+    Todavía no sabemos cuál es su ritmo, así que solo miramos el tiempo:
+    
+    - Hace menos de 3 meses → **🟢 Activo**. Es reciente, puede volver.
+    - Entre 3 meses y 1 año → **🟡 En riesgo**. Se está enfriando.
+    - Más de 1 año → **🔴 Abandonado**.
+    
+    ---
+    
+    ### Si te compró varias veces
+    
+    Acá ya conocemos su ritmo habitual, así que el sistema detecta cuando ese ritmo se rompe:
+    
+    - **🔴 Abandonado** — Pasó más de un año sin comprar/canjear, o el sistema estima que es muy poco probable que vuelva.
+    - **🟡 En riesgo** — Pasó más de 6 meses sin comprar, o el sistema detecta que se cortó su patrón de compra.
+    - **🟢 Activo** — Sigue comprando con la regularidad de siempre.
+    
+    ---
+    
+    ### Lo importante
+    
+    Un socio puede caer en riesgo por dos motivos: porque pasó mucho tiempo sin venir, o porque venía comprando seguido y de golpe cortó.
+    
+    Los socios **En riesgo** son tu mayor oportunidad: todavía se pueden recuperar con una promo bien dirigida. Los **Abandonados** necesitan una acción más fuerte.
+    </details>
+    """, unsafe_allow_html=True)
 
     if n_total == 0:
         st.info("No hay socios para este punto de venta.")
