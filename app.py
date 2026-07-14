@@ -335,6 +335,53 @@ st.markdown("""
         font-weight: 400 !important;
         color: rgba(255,255,255,0.7) !important;
     }
+
+    /* Expander styles */
+    details {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+        width: 100% !important;
+    }
+    
+    details:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: rgba(255,255,255,0.12);
+    }
+    
+    details summary {
+        cursor: pointer;
+        user-select: none;
+        padding: 12px 10px !important;
+        margin: -12px -10px !important;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        color: #ffffff;
+        transition: all 0.2s ease;
+        display: block !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        line-height: 1.6 !important;
+    }
+    
+    details summary:hover {
+        background: rgba(236,126,4,0.1);
+        color: #ec7e04;
+    }
+    
+    details[open] summary {
+        color: #ec7e04;
+        margin-bottom: 12px;
+    }
+    
+    details > * {
+        margin-top: 8px;
+    }
             
 
 </style>
@@ -683,7 +730,7 @@ if tab_metrics is not None:
 with tab1:
     st.markdown("#### Resumen de Mi Comunidad")
     
-    with st.expander("ℹ️ ¿Cómo sabemos si un socio está activo, en riesgo o abandonó?", expanded=False):
+    with st.expander("📊 Cómo clasificamos a los socios", expanded=False):
         st.markdown("""
         El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
         
@@ -1179,7 +1226,7 @@ with tab2:
         unsafe_allow_html=True,
     )
     
-    with st.expander("ℹ️ ¿Cómo sabemos si un socio está activo, en riesgo o abandonó?", expanded=False):
+    with st.expander("📊 Cómo clasificamos a los socios", expanded=False):
         st.markdown("""
         El sistema mira dos cosas de cada socio: **cuántas veces te compró/canjeó** y **hace cuánto tiempo no viene**.
         
