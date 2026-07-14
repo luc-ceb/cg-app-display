@@ -6,3 +6,4 @@ pyarrow
 numpy
 groq
 anthropic
+openpyxl==3.1.5
