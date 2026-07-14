@@ -341,10 +341,12 @@ st.markdown("""
         background: rgba(255,255,255,0.03);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 8px;
-        padding: 16px;
+        padding: 0 !important;
         margin-bottom: 16px;
         transition: all 0.3s ease;
         width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
     }
     
     details:hover {
@@ -355,18 +357,28 @@ st.markdown("""
     details summary {
         cursor: pointer;
         user-select: none;
-        padding: 12px 10px !important;
-        margin: -12px -10px !important;
+        padding: 14px 14px !important;
+        margin: 0 !important;
         border-radius: 6px;
         font-weight: 600;
         font-size: 13px;
         color: #ffffff;
         transition: all 0.2s ease;
-        display: block !important;
+        display: flex !important;
+        align-items: center !important;
         white-space: normal !important;
         word-wrap: break-word !important;
+        word-break: break-word !important;
         overflow-wrap: break-word !important;
-        line-height: 1.6 !important;
+        line-height: 1.8 !important;
+        max-width: 100% !important;
+        min-height: 44px !important;
+    }
+    
+    details summary::marker {
+        color: #ec7e04;
+        font-size: 14px;
+        margin-right: 10px !important;
     }
     
     details summary:hover {
@@ -376,7 +388,18 @@ st.markdown("""
     
     details[open] summary {
         color: #ec7e04;
-        margin-bottom: 12px;
+        margin-bottom: 0 !important;
+        border-bottom: 1px solid rgba(236,126,4,0.2);
+    }
+    
+    details[open] > *:not(summary) {
+        padding: 12px 14px !important;
+        animation: slideDown 0.3s ease forwards;
+    }
+    
+    @keyframes slideDown {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     
     details > * {
