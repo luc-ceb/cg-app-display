@@ -362,33 +362,14 @@ st.markdown("""
         font-size: 13px;
         color: #ffffff;
         transition: all 0.2s ease;
-        list-style: none !important;
         display: block !important;
-        white-space: pre-wrap !important;
+        white-space: normal !important;
         word-wrap: break-word !important;
         word-break: break-word !important;
         overflow-wrap: break-word !important;
         line-height: 1.5 !important;
-    }
-    
-    details summary::-webkit-details-marker {
-        display: none !important;
-    }
-    
-    details summary::marker {
-        display: none !important;
-    }
-    
-    details summary::before {
-        content: "▶ " !important;
-        color: #ec7e04;
-        margin-right: 8px !important;
-        font-size: 11px !important;
-        display: inline !important;
-    }
-    
-    details[open] summary::before {
-        content: "▼ " !important;
+        text-align: left !important;
+        outline: none !important;
     }
     
     details summary:hover {
