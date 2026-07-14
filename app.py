@@ -341,12 +341,10 @@ st.markdown("""
         background: rgba(255,255,255,0.03);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 8px;
-        padding: 0 !important;
         margin-bottom: 16px;
         transition: all 0.3s ease;
         width: 100% !important;
         box-sizing: border-box !important;
-        overflow: hidden !important;
     }
     
     details:hover {
@@ -357,28 +355,40 @@ st.markdown("""
     details summary {
         cursor: pointer;
         user-select: none;
-        padding: 14px 14px !important;
+        padding: 16px 18px !important;
         margin: 0 !important;
         border-radius: 6px;
         font-weight: 600;
         font-size: 13px;
         color: #ffffff;
         transition: all 0.2s ease;
-        display: flex !important;
-        align-items: center !important;
-        white-space: normal !important;
+        list-style: none !important;
+        display: block !important;
+        white-space: pre-wrap !important;
         word-wrap: break-word !important;
         word-break: break-word !important;
         overflow-wrap: break-word !important;
-        line-height: 1.8 !important;
-        max-width: 100% !important;
-        min-height: 44px !important;
+        line-height: 1.5 !important;
+    }
+    
+    details summary::-webkit-details-marker {
+        display: none !important;
     }
     
     details summary::marker {
+        display: none !important;
+    }
+    
+    details summary::before {
+        content: "▶ " !important;
         color: #ec7e04;
-        font-size: 14px;
-        margin-right: 10px !important;
+        margin-right: 8px !important;
+        font-size: 11px !important;
+        display: inline !important;
+    }
+    
+    details[open] summary::before {
+        content: "▼ " !important;
     }
     
     details summary:hover {
@@ -386,20 +396,19 @@ st.markdown("""
         color: #ec7e04;
     }
     
+    details[open] {
+        background: rgba(255,255,255,0.05);
+    }
+    
     details[open] summary {
         color: #ec7e04;
-        margin-bottom: 0 !important;
         border-bottom: 1px solid rgba(236,126,4,0.2);
+        margin-bottom: 0 !important;
     }
     
-    details[open] > *:not(summary) {
-        padding: 12px 14px !important;
-        animation: slideDown 0.3s ease forwards;
-    }
-    
-    @keyframes slideDown {
-        from { opacity: 0; }
-        to { opacity: 1; }
+    details > *:not(summary) {
+        padding: 0 18px 16px 18px !important;
+        margin: 0 !important;
     }
     
     details > * {
