@@ -418,7 +418,6 @@ def load_branch(bid):
 def load_ventas():
     return pd.read_parquet("data/ventas-general.parquet")
 
-st.cache_data.clear()
 franquicias = load_franquicias()
 
 # ─────────────────────────────────────────────
