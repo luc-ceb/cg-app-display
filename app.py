@@ -45,8 +45,9 @@ def get_db_connection():
 
 
 def log_event(evento, franquicia_id, usuario_id, objetivo="", productos="", detalle=""):
-    conn = get_db_connection()
-    conn.execute(
+    try: 
+        conn = get_db_connection()
+        conn.execute(
         "INSERT INTO events (franquicia_id, usuario_id, evento, timestamp, objetivo, productos, detalle) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             franquicia_id,
@@ -57,8 +58,12 @@ def log_event(evento, franquicia_id, usuario_id, objetivo="", productos="", deta
             productos,
             detalle,
         ),
-    )
-    conn.commit()
+        )
+        conn.commit()
+    except Exception as e:
+        
+        return
+
 
 
 def register_download_event(franquicia_id, usuario_id, objetivo, detalle):
