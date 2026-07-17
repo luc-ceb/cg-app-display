@@ -1088,6 +1088,7 @@ with tab1:
                         "html": (
                             "<div style='padding:8px; font-family:DM Sans,sans-serif;'>"
                             "<b style='color:#ec7e04;'>Nombre: {Nombre}</b><br>"
+                            "📧 Email: <b>{email}</b><br>"
                             "📦 Kg comprados por año: <b>{Kilos}</b><br>"
                             "🔄 Compras por año: <b>{Cantidad de compras}</b><br>"
                             "📅 Última compra: hace <b>{Dias desde ultima compra}</b> días<br>"
